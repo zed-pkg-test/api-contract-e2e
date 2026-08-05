@@ -19,7 +19,7 @@ Source organization: `zed-pkg`
 | Source | Commit | Branch observed |
 |---|---:|---|
 | `zed-pkg/zed-api-server.rs` | `4eaacda14d5c5e38b81404415631e364ac7bdb2c` | `main` |
-| `zed-pkg/zed-clients` | `f7738c74d877ae5f13a438cba509db54195b5a75` | `main` |
+| `zed-pkg/zed-clients` | `c97ead9ce1cd3675be7704d35e2395fa59f4baa4` | `main` |
 
 ## Dependency lanes
 

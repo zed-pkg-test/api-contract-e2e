@@ -1,0 +1,434 @@
+{
+  "cycle": {
+    "completeness": "complete",
+    "edges": [
+      {
+        "from": {
+          "name": "a",
+          "org": "cycle",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        },
+        "kind": "runtime",
+        "optional": false,
+        "requirement": "=1.0.0",
+        "to": {
+          "name": "b",
+          "org": "cycle",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        }
+      },
+      {
+        "from": {
+          "name": "b",
+          "org": "cycle",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        },
+        "kind": "runtime",
+        "optional": false,
+        "requirement": "=1.0.0",
+        "to": {
+          "name": "a",
+          "org": "cycle",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        }
+      }
+    ],
+    "graph_digest": "sha256:6c06001b8adc62f8dfbd3d759598596b18722715de4da17ff26a689cae9980c6",
+    "nodes": [
+      {
+        "artifact_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "id": {
+          "name": "a",
+          "org": "cycle",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        }
+      },
+      {
+        "artifact_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "id": {
+          "name": "b",
+          "org": "cycle",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        }
+      }
+    ],
+    "provenance": {
+      "lock_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "registry_snapshots": [
+        {
+          "checkpoint_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "registry_id": "registry:global"
+        }
+      ],
+      "resolver_version": "zed-resolver/1.0.0",
+      "target": "x86_64-unknown-linux-gnu"
+    },
+    "roots": [
+      {
+        "name": "a",
+        "org": "cycle",
+        "registry_id": "registry:global",
+        "version": "1.0.0"
+      }
+    ],
+    "schema": "zpkg/dependency-graph/v1",
+    "view": "resolved"
+  },
+  "declared": {
+    "dependencies": [
+      {
+        "default_features": true,
+        "kind": "runtime",
+        "name": "left",
+        "optional": false,
+        "org": "acme",
+        "registry_id": "registry:global",
+        "requirement": "^1.0"
+      },
+      {
+        "default_features": false,
+        "features": [
+          "codegen"
+        ],
+        "kind": "build",
+        "name": "leaf",
+        "optional": true,
+        "org": "shared",
+        "registry_id": "registry:private",
+        "requirement": "=2.0.0",
+        "target": "cfg(unix)"
+      }
+    ],
+    "graph_digest": "sha256:afb7fe78b6d5511977e3a7cf592d51453c76d1308485ca9753260fe64c573176",
+    "package": {
+      "name": "app",
+      "org": "acme",
+      "registry_id": "registry:global",
+      "version": "1.0.0"
+    },
+    "schema": "zpkg/dependency-graph/v1",
+    "view": "declared"
+  },
+  "diamond": {
+    "completeness": "complete",
+    "edges": [
+      {
+        "from": {
+          "name": "app",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        },
+        "kind": "runtime",
+        "optional": false,
+        "requirement": "^1.0",
+        "to": {
+          "name": "left",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.1.0"
+        }
+      },
+      {
+        "from": {
+          "name": "app",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        },
+        "kind": "runtime",
+        "optional": false,
+        "requirement": "^1.0",
+        "to": {
+          "name": "right",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.2.0"
+        }
+      },
+      {
+        "from": {
+          "name": "app",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        },
+        "kind": "build",
+        "optional": true,
+        "requirement": "=2.0.0",
+        "to": {
+          "name": "leaf",
+          "org": "shared",
+          "registry_id": "registry:private",
+          "version": "2.0.0"
+        }
+      },
+      {
+        "features": [
+          "tls"
+        ],
+        "from": {
+          "name": "left",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.1.0"
+        },
+        "kind": "runtime",
+        "optional": false,
+        "requirement": "^2.0",
+        "target": "cfg(unix)",
+        "to": {
+          "name": "leaf",
+          "org": "shared",
+          "registry_id": "registry:global",
+          "version": "2.0.0"
+        }
+      },
+      {
+        "features": [
+          "tls"
+        ],
+        "from": {
+          "name": "right",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.2.0"
+        },
+        "kind": "runtime",
+        "optional": false,
+        "requirement": "^2.0",
+        "target": "cfg(unix)",
+        "to": {
+          "name": "leaf",
+          "org": "shared",
+          "registry_id": "registry:global",
+          "version": "2.0.0"
+        }
+      }
+    ],
+    "graph_digest": "sha256:208571f80779ab5e91226e9663c389c6ff624ebdb8d8ed7a14f610974eab3c1f",
+    "nodes": [
+      {
+        "artifact_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "features": [
+          "default"
+        ],
+        "id": {
+          "name": "app",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        }
+      },
+      {
+        "artifact_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "id": {
+          "name": "left",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.1.0"
+        }
+      },
+      {
+        "artifact_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "id": {
+          "name": "right",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.2.0"
+        }
+      },
+      {
+        "artifact_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "features": [
+          "tls"
+        ],
+        "id": {
+          "name": "leaf",
+          "org": "shared",
+          "registry_id": "registry:global",
+          "version": "2.0.0"
+        }
+      },
+      {
+        "artifact_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "id": {
+          "name": "leaf",
+          "org": "shared",
+          "registry_id": "registry:private",
+          "version": "2.0.0"
+        }
+      }
+    ],
+    "provenance": {
+      "enabled_features": [
+        "server",
+        "tls"
+      ],
+      "lock_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "registry_snapshots": [
+        {
+          "checkpoint_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "registry_id": "registry:global"
+        },
+        {
+          "checkpoint_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "registry_id": "registry:private"
+        }
+      ],
+      "resolver_version": "zed-resolver/1.0.0",
+      "target": "x86_64-unknown-linux-gnu"
+    },
+    "roots": [
+      {
+        "name": "app",
+        "org": "acme",
+        "registry_id": "registry:global",
+        "version": "1.0.0"
+      }
+    ],
+    "schema": "zpkg/dependency-graph/v1",
+    "view": "resolved"
+  },
+  "projected": {
+    "completeness": "projected",
+    "edges": [
+      {
+        "from": {
+          "name": "app",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        },
+        "kind": "runtime",
+        "optional": false,
+        "requirement": "^1.0",
+        "to": {
+          "name": "left",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.1.0"
+        }
+      },
+      {
+        "from": {
+          "name": "app",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        },
+        "kind": "runtime",
+        "optional": false,
+        "requirement": "^1.0",
+        "to": {
+          "name": "right",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.2.0"
+        }
+      },
+      {
+        "from": {
+          "name": "app",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        },
+        "kind": "build",
+        "optional": true,
+        "requirement": "=2.0.0",
+        "to": {
+          "name": "leaf",
+          "org": "shared",
+          "registry_id": "registry:private",
+          "version": "2.0.0"
+        }
+      }
+    ],
+    "graph_digest": "sha256:153fee667cc73d23e73d3aaf286510f0ea9b7662a3a03df2496d8cc1330ad892",
+    "nodes": [
+      {
+        "artifact_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "features": [
+          "default"
+        ],
+        "id": {
+          "name": "app",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.0.0"
+        }
+      },
+      {
+        "artifact_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "id": {
+          "name": "left",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.1.0"
+        }
+      },
+      {
+        "artifact_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "id": {
+          "name": "right",
+          "org": "acme",
+          "registry_id": "registry:global",
+          "version": "1.2.0"
+        }
+      },
+      {
+        "artifact_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "id": {
+          "name": "leaf",
+          "org": "shared",
+          "registry_id": "registry:private",
+          "version": "2.0.0"
+        }
+      }
+    ],
+    "parent_graph_digest": "sha256:208571f80779ab5e91226e9663c389c6ff624ebdb8d8ed7a14f610974eab3c1f",
+    "projection": {
+      "kinds": [
+        "runtime",
+        "build"
+      ],
+      "max_depth": 1
+    },
+    "provenance": {
+      "enabled_features": [
+        "server",
+        "tls"
+      ],
+      "lock_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "registry_snapshots": [
+        {
+          "checkpoint_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "registry_id": "registry:global"
+        },
+        {
+          "checkpoint_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "registry_id": "registry:private"
+        }
+      ],
+      "resolver_version": "zed-resolver/1.0.0",
+      "target": "x86_64-unknown-linux-gnu"
+    },
+    "roots": [
+      {
+        "name": "app",
+        "org": "acme",
+        "registry_id": "registry:global",
+        "version": "1.0.0"
+      }
+    ],
+    "schema": "zpkg/dependency-graph/v1",
+    "view": "resolved"
+  }
+}

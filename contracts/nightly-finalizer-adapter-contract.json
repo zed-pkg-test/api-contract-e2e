@@ -5,7 +5,7 @@
     "adapter_pull_request": 40,
     "adapter_revision": "b1853a4b6ab655ca7306f791bad7a957708ca9ce",
     "hardening_pull_request": 46,
-    "hardening_revision": "498b7a24a4794f8b28816ca79d43072b704f5581"
+    "hardening_revision": "db28f410aae5ccc179b94040a89c45a4298cd948"
   },
   "merge_forbidden": true,
   "linear": {

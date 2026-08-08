@@ -45,6 +45,29 @@ function verifyIssue(issue, expected) {
   return marker;
 }
 
+function verifyGraphqlEnvelope(payload) {
+  assert.ok(payload && typeof payload === 'object' && !Array.isArray(payload));
+  assert.ok(!Array.isArray(payload.errors) || payload.errors.length === 0, 'GraphQL errors fail closed');
+  assert.ok(payload.data?.issue, 'GraphQL response must contain data.issue');
+  return verifyIssue(payload.data.issue, contract.linear.expected);
+}
+
+function validateRuntimeConfig({ endpoint, bucket, region, accessKeyId, secretAccessKey }) {
+  const url = new URL(endpoint);
+  const loopback = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  assert.ok(url.protocol === 'https:' || (url.protocol === 'http:' && loopback));
+  assert.equal(url.username, '');
+  assert.equal(url.password, '');
+  assert.equal(url.search, '');
+  assert.equal(url.hash, '');
+  assert.ok(['', '/'].includes(url.pathname));
+  if (!loopback) assert.match(url.hostname, /^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/i);
+  assert.match(bucket, /^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])$/);
+  assert.equal(region, 'auto');
+  assert.match(accessKeyId, /^[A-Za-z0-9]+$/);
+  assert.ok(secretAccessKey.length > 0 && secretAccessKey.trim() === secretAccessKey);
+}
+
 function encodePathSegment(value) {
   return encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
     `%${character.charCodeAt(0).toString(16).toUpperCase()}`
@@ -103,9 +126,10 @@ function signPut(key, body, contentType) {
 }
 
 class ObjectStoreCanary {
-  constructor() {
+  constructor({ corruptHead = false } = {}) {
     this.objects = new Map();
     this.operations = [];
+    this.corruptHead = corruptHead;
   }
 
   put(key, body, { fail = false } = {}) {
@@ -119,7 +143,10 @@ class ObjectStoreCanary {
   head(key) {
     this.operations.push('HEAD');
     assert.ok(this.objects.has(key), `missing object ${key}`);
-    return { status: 200, sha256: sha256(this.objects.get(key)) };
+    return {
+      status: 200,
+      sha256: this.corruptHead ? '0'.repeat(64) : sha256(this.objects.get(key))
+    };
   }
 
   delete(key) {
@@ -188,6 +215,42 @@ test('Linear major marker binds the canonical v1 field set and active issue stat
   );
 });
 
+test('Linear GraphQL errors fail closed even when data is present', () => {
+  const issue = {
+    identifier: contract.linear.issue_identifier,
+    description: markerFor(contract.linear.expected),
+    archivedAt: null,
+    completedAt: null,
+    canceledAt: null
+  };
+  assert.deepEqual(verifyGraphqlEnvelope({ data: { issue } }), contract.linear.expected);
+  assert.throws(
+    () => verifyGraphqlEnvelope({
+      data: { issue },
+      errors: [{ message: 'synthetic rate limit' }]
+    }),
+    /GraphQL errors fail closed/
+  );
+  assert.throws(() => verifyGraphqlEnvelope({ data: { issue: null } }), /data.issue/);
+});
+
+test('unsafe R2 runtime configuration is rejected before persistence', () => {
+  const valid = {
+    endpoint: contract.r2.endpoint,
+    bucket: contract.r2.bucket,
+    region: contract.r2.region,
+    accessKeyId: contract.r2.access_key_id,
+    secretAccessKey: contract.r2.secret_access_key
+  };
+  assert.doesNotThrow(() => validateRuntimeConfig(valid));
+  assert.throws(() => validateRuntimeConfig({ ...valid, endpoint: 'https://s3.example.com' }));
+  assert.throws(() => validateRuntimeConfig({ ...valid, endpoint: `${valid.endpoint}/path` }));
+  assert.throws(() => validateRuntimeConfig({ ...valid, bucket: 'contains.dot' }));
+  assert.throws(() => validateRuntimeConfig({ ...valid, region: 'us-east-1' }));
+  assert.throws(() => validateRuntimeConfig({ ...valid, accessKeyId: '' }));
+  assert.throws(() => validateRuntimeConfig({ ...valid, secretAccessKey: '' }));
+});
+
 test('R2 keys and SigV4 PUT signature independently match the reviewed vector', () => {
   const jsonKey = artifactKey('json');
   assert.equal(jsonKey, contract.r2.expected_json_key);
@@ -207,6 +270,13 @@ test('successful persistence uses conditional PUT then independent HEAD for both
   assert.equal(result.durable, true);
   assert.deepEqual(store.operations, contract.r2.success_sequence);
   assert.equal(store.objects.size, 2);
+});
+
+test('corrupt HEAD evidence fails closed and removes the newly written object', async () => {
+  const store = new ObjectStoreCanary({ corruptHead: true });
+  await assert.rejects(persistPair(store), /Expected values to be strictly equal/);
+  assert.deepEqual(store.operations, ['PUT', 'HEAD', 'DELETE']);
+  assert.equal(store.objects.size, 0);
 });
 
 test('idempotent replay never overwrites matching existing objects', async () => {

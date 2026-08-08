@@ -7,6 +7,7 @@ const contractUrl = new URL('../contracts/nightly-finalizer-adapter-contract.jso
 const contract = JSON.parse(await readFile(contractUrl, 'utf8'));
 
 const MARKER = /<!-- nightly-interdependency-major:(\{[^\r\n]*\}) -->/g;
+const EMPTY_SHA256 = createHash('sha256').update('').digest('hex');
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -82,28 +83,31 @@ function artifactKey(extension) {
   return `${r2.prefix}/${datePath}/${r2.artifact_key}/${timestamp}-${r2.graph_sha256}.${extension}`;
 }
 
-function signPut(key, body, contentType) {
+function signRequest(method, key, { body = '', contentType = null, etag = null } = {}) {
   const r2 = contract.r2;
   const url = new URL(
     `/${[r2.bucket, ...key.split('/')].map(encodePathSegment).join('/')}`,
     r2.endpoint
   );
-  const bodyHash = sha256(body);
+  const bodyHash = method === 'PUT' ? sha256(body) : EMPTY_SHA256;
   const amzDate = '20260808T053000Z';
   const dateStamp = amzDate.slice(0, 8);
   const headers = {
-    'content-type': contentType,
     host: url.host,
-    'if-none-match': '*',
     'x-amz-content-sha256': bodyHash,
-    'x-amz-date': amzDate,
-    'x-amz-meta-sha256': bodyHash
+    'x-amz-date': amzDate
   };
+  if (method === 'PUT') {
+    headers['content-type'] = contentType;
+    headers['if-none-match'] = '*';
+    headers['x-amz-meta-sha256'] = bodyHash;
+  }
+  if (method === 'GET') headers['if-match'] = etag;
   const ordered = Object.entries(headers).sort(([left], [right]) => left.localeCompare(right));
   const signedHeaders = ordered.map(([name]) => name).join(';');
   const canonicalHeaders = `${ordered.map(([name, value]) => `${name}:${value}`).join('\n')}\n`;
   const canonicalRequest = [
-    'PUT',
+    method,
     url.pathname,
     '',
     canonicalHeaders,
@@ -126,27 +130,51 @@ function signPut(key, body, contentType) {
 }
 
 class ObjectStoreCanary {
-  constructor({ corruptHead = false } = {}) {
+  constructor({ corruptHead = false, corruptGet = false, oversizeGet = false, getStatus = 200 } = {}) {
     this.objects = new Map();
     this.operations = [];
     this.corruptHead = corruptHead;
+    this.corruptGet = corruptGet;
+    this.oversizeGet = oversizeGet;
+    this.getStatus = getStatus;
   }
 
-  put(key, body, { fail = false } = {}) {
+  put(key, body, contentType, { fail = false } = {}) {
     this.operations.push('PUT');
     if (fail) throw new Error('synthetic PUT failure');
     if (this.objects.has(key)) return { created: false, status: 412 };
-    this.objects.set(key, body);
+    const etag = `"${sha256(body).slice(0, 32)}"`;
+    this.objects.set(key, {
+      body,
+      contentType,
+      metadataHash: sha256(body),
+      etag
+    });
     return { created: true, status: 200 };
   }
 
   head(key) {
     this.operations.push('HEAD');
-    assert.ok(this.objects.has(key), `missing object ${key}`);
+    const object = this.objects.get(key);
+    assert.ok(object, `missing object ${key}`);
     return {
       status: 200,
-      sha256: this.corruptHead ? '0'.repeat(64) : sha256(this.objects.get(key))
+      bytes: Buffer.byteLength(object.body, 'utf8'),
+      contentType: object.contentType,
+      sha256: this.corruptHead ? '0'.repeat(64) : object.metadataHash,
+      etag: object.etag
     };
+  }
+
+  get(key, ifMatch) {
+    this.operations.push('GET');
+    const object = this.objects.get(key);
+    assert.ok(object, `missing object ${key}`);
+    assert.equal(ifMatch, object.etag);
+    if (this.getStatus !== 200) return { status: this.getStatus, body: '' };
+    let body = this.corruptGet ? object.body.replace('ok', 'no') : object.body;
+    if (this.oversizeGet) body += 'x';
+    return { status: 200, body };
   }
 
   delete(key) {
@@ -155,18 +183,43 @@ class ObjectStoreCanary {
   }
 }
 
+function verifyHead(head, expectedBody, contentType) {
+  assert.equal(head.status, 200);
+  assert.equal(head.bytes, Buffer.byteLength(expectedBody, 'utf8'));
+  assert.equal(head.contentType, contentType);
+  assert.equal(head.sha256, sha256(expectedBody));
+  assert.match(head.etag, /^"[a-f0-9]{32}"$/);
+}
+
+function verifyGet(result, expectedBody) {
+  assert.equal(result.status, 200);
+  const bytes = Buffer.from(result.body, 'utf8');
+  assert.ok(bytes.length <= Buffer.byteLength(expectedBody, 'utf8'), 'GET body exceeded expected size');
+  assert.equal(bytes.length, Buffer.byteLength(expectedBody, 'utf8'));
+  assert.equal(sha256(bytes), sha256(expectedBody));
+}
+
 async function persistPair(store, { failMarkdown = false } = {}) {
   const jsonKey = artifactKey('json');
   const markdownKey = artifactKey('md');
   const created = [];
   try {
-    const jsonPut = store.put(jsonKey, contract.r2.json_body);
+    const jsonPut = store.put(jsonKey, contract.r2.json_body, 'application/json');
     if (jsonPut.created) created.push(jsonKey);
-    assert.equal(store.head(jsonKey).sha256, sha256(contract.r2.json_body));
+    const jsonHead = store.head(jsonKey);
+    verifyHead(jsonHead, contract.r2.json_body, 'application/json');
+    verifyGet(store.get(jsonKey, jsonHead.etag), contract.r2.json_body);
 
-    const markdownPut = store.put(markdownKey, contract.r2.markdown_body, { fail: failMarkdown });
+    const markdownPut = store.put(
+      markdownKey,
+      contract.r2.markdown_body,
+      'text/markdown',
+      { fail: failMarkdown }
+    );
     if (markdownPut.created) created.push(markdownKey);
-    assert.equal(store.head(markdownKey).sha256, sha256(contract.r2.markdown_body));
+    const markdownHead = store.head(markdownKey);
+    verifyHead(markdownHead, contract.r2.markdown_body, 'text/markdown');
+    verifyGet(store.get(markdownKey, markdownHead.etag), contract.r2.markdown_body);
     return { durable: true, jsonKey, markdownKey };
   } catch (error) {
     for (const key of created.reverse()) store.delete(key);
@@ -174,12 +227,15 @@ async function persistPair(store, { failMarkdown = false } = {}) {
   }
 }
 
-test('contract is exact-source, public-test-only, and merge-forbidden', () => {
-  assert.equal(contract.schema, 'nightly-finalizer-adapter-conformance.v1');
+test('contract binds both adapter and hardening exact heads and remains merge-forbidden', () => {
+  assert.equal(contract.schema, 'nightly-finalizer-adapter-conformance.v2');
   assert.equal(contract.source.repository, 'ORESoftware/project-registry');
-  assert.equal(contract.source.pull_request, 40);
-  assert.match(contract.source.revision, /^[a-f0-9]{40}$/);
+  assert.equal(contract.source.adapter_pull_request, 40);
+  assert.equal(contract.source.hardening_pull_request, 46);
+  assert.match(contract.source.adapter_revision, /^[a-f0-9]{40}$/);
+  assert.match(contract.source.hardening_revision, /^[a-f0-9]{40}$/);
   assert.equal(contract.merge_forbidden, true);
+  assert.equal(contract.r2.content_verification_required, true);
   assert.deepEqual(contract.safety, {
     production_writes: false,
     default_branch_mutation: false,
@@ -200,19 +256,10 @@ test('Linear major marker binds the canonical v1 field set and active issue stat
   };
   assert.deepEqual(verifyIssue(issue, expected), expected);
 
-  assert.throws(
-    () => parseMarker(`${markerFor(expected)}\n${markerFor(expected)}`),
-    /exactly one/
-  );
-  assert.throws(
-    () => verifyMarker({ ...expected, note: 'unexpected' }, expected)
-  );
-  assert.throws(
-    () => verifyMarker({ ...expected, dependency: 'zed-pkg/other-client' }, expected)
-  );
-  assert.throws(
-    () => verifyIssue({ ...issue, completedAt: '2026-08-08T05:31:00.000Z' }, expected)
-  );
+  assert.throws(() => parseMarker(`${markerFor(expected)}\n${markerFor(expected)}`), /exactly one/);
+  assert.throws(() => verifyMarker({ ...expected, note: 'unexpected' }, expected));
+  assert.throws(() => verifyMarker({ ...expected, dependency: 'zed-pkg/other-client' }, expected));
+  assert.throws(() => verifyIssue({ ...issue, completedAt: '2026-08-08T05:31:00.000Z' }, expected));
 });
 
 test('Linear GraphQL errors fail closed even when data is present', () => {
@@ -225,10 +272,7 @@ test('Linear GraphQL errors fail closed even when data is present', () => {
   };
   assert.deepEqual(verifyGraphqlEnvelope({ data: { issue } }), contract.linear.expected);
   assert.throws(
-    () => verifyGraphqlEnvelope({
-      data: { issue },
-      errors: [{ message: 'synthetic rate limit' }]
-    }),
+    () => verifyGraphqlEnvelope({ data: { issue }, errors: [{ message: 'synthetic rate limit' }] }),
     /GraphQL errors fail closed/
   );
   assert.throws(() => verifyGraphqlEnvelope({ data: { issue: null } }), /data.issue/);
@@ -251,20 +295,29 @@ test('unsafe R2 runtime configuration is rejected before persistence', () => {
   assert.throws(() => validateRuntimeConfig({ ...valid, secretAccessKey: '' }));
 });
 
-test('R2 keys and SigV4 PUT signature independently match the reviewed vector', () => {
+test('R2 key and SigV4 PUT signature independently match the reviewed vector', () => {
   const jsonKey = artifactKey('json');
   assert.equal(jsonKey, contract.r2.expected_json_key);
   assert.equal(sha256(contract.r2.json_body), contract.r2.expected_json_body_sha256);
 
-  const signed = signPut(jsonKey, contract.r2.json_body, 'application/json');
+  const signed = signRequest('PUT', jsonKey, {
+    body: contract.r2.json_body,
+    contentType: 'application/json'
+  });
   assert.equal(signed.bodyHash, contract.r2.expected_json_body_sha256);
   assert.equal(signed.signature, contract.r2.expected_put_signature);
-  assert.deepEqual(signed.signedHeaders.split(';'), contract.r2.required_signed_headers);
+  assert.deepEqual(signed.signedHeaders.split(';'), contract.r2.required_put_signed_headers);
   assert.equal(new URL(signed.url).search, '');
-  assert.ok(signed.url.startsWith(`${contract.r2.endpoint}/${contract.r2.bucket}/`));
 });
 
-test('successful persistence uses conditional PUT then independent HEAD for both objects', async () => {
+test('SigV4 GET binds If-Match ETag and empty payload hash', () => {
+  const signed = signRequest('GET', artifactKey('json'), { etag: contract.r2.expected_json_etag });
+  assert.equal(signed.bodyHash, EMPTY_SHA256);
+  assert.equal(signed.signature, contract.r2.expected_get_signature);
+  assert.deepEqual(signed.signedHeaders.split(';'), contract.r2.required_get_signed_headers);
+});
+
+test('successful persistence requires PUT, HEAD, and body-verifying GET for both objects', async () => {
   const store = new ObjectStoreCanary();
   const result = await persistPair(store);
   assert.equal(result.durable, true);
@@ -274,19 +327,47 @@ test('successful persistence uses conditional PUT then independent HEAD for both
 
 test('corrupt HEAD evidence fails closed and removes the newly written object', async () => {
   const store = new ObjectStoreCanary({ corruptHead: true });
-  await assert.rejects(persistPair(store), /Expected values to be strictly equal/);
+  await assert.rejects(persistPair(store));
   assert.deepEqual(store.operations, ['PUT', 'HEAD', 'DELETE']);
   assert.equal(store.objects.size, 0);
+});
+
+test('forged matching metadata with a different pre-existing body fails and is preserved', async () => {
+  const store = new ObjectStoreCanary();
+  await persistPair(store);
+  const jsonKey = artifactKey('json');
+  const object = store.objects.get(jsonKey);
+  object.body = object.body.replace('ok', 'no');
+  object.etag = `"${sha256(object.body).slice(0, 32)}"`;
+  object.metadataHash = sha256(contract.r2.json_body);
+  store.operations.length = 0;
+
+  await assert.rejects(persistPair(store));
+  assert.deepEqual(store.operations, contract.r2.preexisting_mismatch_sequence);
+  assert.equal(store.objects.get(jsonKey), object);
+});
+
+test('corrupt, oversized, and non-success GET all fail closed with invocation-scoped rollback', async () => {
+  for (const options of [
+    { corruptGet: true },
+    { oversizeGet: true },
+    { getStatus: 503 }
+  ]) {
+    const store = new ObjectStoreCanary(options);
+    await assert.rejects(persistPair(store));
+    assert.deepEqual(store.operations, contract.r2.new_object_get_failure_sequence);
+    assert.equal(store.objects.size, 0);
+  }
 });
 
 test('idempotent replay never overwrites matching existing objects', async () => {
   const store = new ObjectStoreCanary();
   await persistPair(store);
-  const before = new Map(store.objects);
+  const before = structuredClone([...store.objects.entries()]);
   store.operations.length = 0;
   await persistPair(store);
   assert.deepEqual(store.operations, contract.r2.success_sequence);
-  assert.deepEqual(store.objects, before);
+  assert.deepEqual([...store.objects.entries()], before);
 });
 
 test('a second-object failure rolls back only objects created by that invocation', async () => {
@@ -296,11 +377,15 @@ test('a second-object failure rolls back only objects created by that invocation
   assert.equal(fresh.objects.size, 0);
 
   const preexisting = new ObjectStoreCanary();
+  await persistPair(preexisting);
+  const markdownKey = artifactKey('md');
+  preexisting.objects.delete(markdownKey);
   const jsonKey = artifactKey('json');
-  preexisting.objects.set(jsonKey, contract.r2.json_body);
+  const jsonObject = preexisting.objects.get(jsonKey);
+  preexisting.operations.length = 0;
   await assert.rejects(persistPair(preexisting, { failMarkdown: true }), /synthetic PUT failure/);
-  assert.deepEqual(preexisting.operations, ['PUT', 'HEAD', 'PUT']);
-  assert.equal(preexisting.objects.get(jsonKey), contract.r2.json_body);
+  assert.deepEqual(preexisting.operations, ['PUT', 'HEAD', 'GET', 'PUT']);
+  assert.equal(preexisting.objects.get(jsonKey), jsonObject);
 });
 
 test('contract contains no live credential-shaped values or signed URLs', () => {

@@ -1,0 +1,27 @@
+name: dependency graph v1 contract
+
+on:
+  pull_request:
+  push:
+    branches: [agent/dependency-graph-http-contract-v1]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-graph-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out conformance fixtures
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Validate graph, representations, HTTP semantics, limits, and privacy
+        run: node --test scripts/dependency-graph-contract.test.mjs

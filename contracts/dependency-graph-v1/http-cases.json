@@ -1,0 +1,143 @@
+{
+  "schema": "zpkg/dependency-graph-http-cases/v1",
+  "routes": {
+    "declared": "/v1/packages/{org}/{name}/versions/{version}/dependency-graph?view=declared",
+    "resolution": "/v1/resolutions/{resolution_digest}/dependency-graph"
+  },
+  "formats": {
+    "json": "application/vnd.zpkg.dependency-graph.v1+json",
+    "yaml": "application/vnd.zpkg.dependency-graph.v1+yaml",
+    "toml": "application/vnd.zpkg.dependency-graph.v1+toml",
+    "dot": "text/vnd.graphviz; charset=utf-8",
+    "mermaid": "text/vnd.mermaid; charset=utf-8"
+  },
+  "limits": {
+    "max_nodes": 100000,
+    "max_edges": 500000,
+    "max_depth": 1024,
+    "max_encoded_bytes": 67108864,
+    "max_build_milliseconds": 30000
+  },
+  "privacy": {
+    "denial_status": 404,
+    "denial_body": {
+      "code": "not_found",
+      "message": "dependency graph not found"
+    },
+    "forbidden_denial_fields": [
+      "graph_digest",
+      "registry_id",
+      "org",
+      "name",
+      "nodes",
+      "edges",
+      "node_count",
+      "edge_count",
+      "object_key",
+      "download_url"
+    ]
+  },
+  "cases": [
+    {
+      "name": "public immutable JSON resolution",
+      "request": {
+        "method": "GET",
+        "route": "resolution",
+        "accept": "application/vnd.zpkg.dependency-graph.v1+json"
+      },
+      "response": {
+        "status": 200,
+        "cache_control": "public, max-age=31536000, immutable",
+        "has_graph_digest_header": true,
+        "etag_scope": "representation",
+        "has_body": true
+      }
+    },
+    {
+      "name": "HEAD mirrors GET metadata without a body",
+      "request": {
+        "method": "HEAD",
+        "route": "resolution",
+        "accept": "application/vnd.zpkg.dependency-graph.v1+toml"
+      },
+      "response": {
+        "status": 200,
+        "has_graph_digest_header": true,
+        "etag_scope": "representation",
+        "has_body": false
+      }
+    },
+    {
+      "name": "Accept and format conflict",
+      "request": {
+        "method": "GET",
+        "route": "resolution",
+        "accept": "application/vnd.zpkg.dependency-graph.v1+json",
+        "format": "yaml"
+      },
+      "response": {
+        "status": 406,
+        "error_code": "format_conflict",
+        "has_body": true
+      }
+    },
+    {
+      "name": "unauthorized private resolution is non-enumerable",
+      "request": {
+        "method": "GET",
+        "route": "resolution",
+        "authorization": "invalid"
+      },
+      "response": {
+        "status": 404,
+        "cache_control": "private, no-store",
+        "body_ref": "privacy.denial_body",
+        "has_body": true
+      }
+    },
+    {
+      "name": "missing resolution matches unauthorized private resolution",
+      "request": {
+        "method": "GET",
+        "route": "resolution",
+        "resolution": "missing"
+      },
+      "response": {
+        "status": 404,
+        "cache_control": "private, no-store",
+        "body_ref": "privacy.denial_body",
+        "has_body": true
+      }
+    },
+    {
+      "name": "node limit failure never returns a partial graph",
+      "request": {
+        "method": "GET",
+        "route": "resolution",
+        "fixture": "over-node-limit"
+      },
+      "response": {
+        "status": 422,
+        "error_code": "graph_limit_exceeded",
+        "limit_kind": "nodes",
+        "has_body": true,
+        "has_partial_graph": false
+      }
+    },
+    {
+      "name": "encoded representation limit uses payload-too-large",
+      "request": {
+        "method": "GET",
+        "route": "resolution",
+        "fixture": "over-encoded-byte-limit"
+      },
+      "response": {
+        "status": 413,
+        "error_code": "graph_representation_too_large",
+        "limit_kind": "encoded_bytes",
+        "has_body": true,
+        "has_partial_graph": false
+      }
+    }
+  ]
+}

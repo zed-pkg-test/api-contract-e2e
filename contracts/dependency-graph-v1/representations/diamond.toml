@@ -1,0 +1,160 @@
+schema = "zpkg/dependency-graph/v1"
+view = "resolved"
+completeness = "complete"
+graph_digest = "sha256:208571f80779ab5e91226e9663c389c6ff624ebdb8d8ed7a14f610974eab3c1f"
+
+[[roots]]
+registry_id = "registry:global"
+org = "acme"
+name = "app"
+version = "1.0.0"
+
+[[nodes]]
+artifact_digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+features = ["default"]
+
+[nodes.id]
+registry_id = "registry:global"
+org = "acme"
+name = "app"
+version = "1.0.0"
+
+[[nodes]]
+artifact_digest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+[nodes.id]
+registry_id = "registry:global"
+org = "acme"
+name = "left"
+version = "1.1.0"
+
+[[nodes]]
+artifact_digest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+
+[nodes.id]
+registry_id = "registry:global"
+org = "acme"
+name = "right"
+version = "1.2.0"
+
+[[nodes]]
+artifact_digest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+features = ["tls"]
+
+[nodes.id]
+registry_id = "registry:global"
+org = "shared"
+name = "leaf"
+version = "2.0.0"
+
+[[nodes]]
+artifact_digest = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+
+[nodes.id]
+registry_id = "registry:private"
+org = "shared"
+name = "leaf"
+version = "2.0.0"
+
+[[edges]]
+kind = "runtime"
+optional = false
+requirement = "^1.0"
+
+[edges.from]
+registry_id = "registry:global"
+org = "acme"
+name = "app"
+version = "1.0.0"
+
+[edges.to]
+registry_id = "registry:global"
+org = "acme"
+name = "left"
+version = "1.1.0"
+
+[[edges]]
+kind = "runtime"
+optional = false
+requirement = "^1.0"
+
+[edges.from]
+registry_id = "registry:global"
+org = "acme"
+name = "app"
+version = "1.0.0"
+
+[edges.to]
+registry_id = "registry:global"
+org = "acme"
+name = "right"
+version = "1.2.0"
+
+[[edges]]
+kind = "build"
+optional = true
+requirement = "=2.0.0"
+
+[edges.from]
+registry_id = "registry:global"
+org = "acme"
+name = "app"
+version = "1.0.0"
+
+[edges.to]
+registry_id = "registry:private"
+org = "shared"
+name = "leaf"
+version = "2.0.0"
+
+[[edges]]
+kind = "runtime"
+optional = false
+requirement = "^2.0"
+target = "cfg(unix)"
+features = ["tls"]
+
+[edges.from]
+registry_id = "registry:global"
+org = "acme"
+name = "left"
+version = "1.1.0"
+
+[edges.to]
+registry_id = "registry:global"
+org = "shared"
+name = "leaf"
+version = "2.0.0"
+
+[[edges]]
+kind = "runtime"
+optional = false
+requirement = "^2.0"
+target = "cfg(unix)"
+features = ["tls"]
+
+[edges.from]
+registry_id = "registry:global"
+org = "acme"
+name = "right"
+version = "1.2.0"
+
+[edges.to]
+registry_id = "registry:global"
+org = "shared"
+name = "leaf"
+version = "2.0.0"
+
+[provenance]
+resolver_version = "zed-resolver/1.0.0"
+target = "x86_64-unknown-linux-gnu"
+lock_digest = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+enabled_features = ["server", "tls"]
+
+[[provenance.registry_snapshots]]
+registry_id = "registry:global"
+checkpoint_digest = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+
+[[provenance.registry_snapshots]]
+registry_id = "registry:private"
+checkpoint_digest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"

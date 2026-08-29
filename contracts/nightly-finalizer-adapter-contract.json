@@ -1,0 +1,105 @@
+{
+  "schema": "nightly-finalizer-adapter-conformance.v2",
+  "source": {
+    "repository": "ORESoftware/project-registry",
+    "adapter_pull_request": 40,
+    "adapter_revision": "b1853a4b6ab655ca7306f791bad7a957708ca9ce",
+    "hardening_pull_request": 46,
+    "hardening_revision": "db28f410aae5ccc179b94040a89c45a4298cd948"
+  },
+  "merge_forbidden": true,
+  "linear": {
+    "issue_identifier": "DEN-3000",
+    "required_marker_fields": [
+      "candidate_major",
+      "current_major",
+      "dependency",
+      "disposition",
+      "family_fingerprint",
+      "repository",
+      "schema"
+    ],
+    "expected": {
+      "candidate_major": 1,
+      "current_major": 0,
+      "dependency": "zed-pkg/zed-clients",
+      "disposition": "linear-created",
+      "family_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "repository": "zed-pkg-test/api-contract-e2e",
+      "schema": "v1"
+    },
+    "accepted_dispositions": [
+      "linear-created",
+      "linear-updated"
+    ],
+    "require_active_issue": true,
+    "require_exactly_one_marker": true
+  },
+  "r2": {
+    "endpoint": "http://127.0.0.1:43124",
+    "bucket": "nightly-test-artifacts",
+    "region": "auto",
+    "access_key_id": "TESTACCESS123",
+    "secret_access_key": "test-secret-access-key-not-real",
+    "prefix": "nightly/finalizer",
+    "artifact_key": "fleet",
+    "validated_at": "2026-08-08T05:30:00.000Z",
+    "graph_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "json_body": "{\"ok\":true}\n",
+    "markdown_body": "# OK\n",
+    "expected_json_key": "nightly/finalizer/2026/08/08/fleet/2026-08-08T05-30-00.000Z-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.json",
+    "expected_json_body_sha256": "e5f1eb4d806641698a35efe20e098efd20d7d57a9b90ee69079d5bb650920726",
+    "expected_json_etag": "\"e5f1eb4d806641698a35efe20e098efd\"",
+    "expected_put_signature": "f8f569b955c60cc3d0465b45b90e7ffe74cddf223118349cee5e40402f759b85",
+    "expected_get_signature": "69f52c5d1b306b387e920458be807234a3cc5563cbef39b6d756a3ee711b874a",
+    "required_put_signed_headers": [
+      "content-type",
+      "host",
+      "if-none-match",
+      "x-amz-content-sha256",
+      "x-amz-date",
+      "x-amz-meta-sha256"
+    ],
+    "required_get_signed_headers": [
+      "host",
+      "if-match",
+      "x-amz-content-sha256",
+      "x-amz-date"
+    ],
+    "success_sequence": [
+      "PUT",
+      "HEAD",
+      "GET",
+      "PUT",
+      "HEAD",
+      "GET"
+    ],
+    "second_write_failure_sequence": [
+      "PUT",
+      "HEAD",
+      "GET",
+      "PUT",
+      "DELETE"
+    ],
+    "preexisting_mismatch_sequence": [
+      "PUT",
+      "HEAD",
+      "GET"
+    ],
+    "new_object_get_failure_sequence": [
+      "PUT",
+      "HEAD",
+      "GET",
+      "DELETE"
+    ],
+    "content_verification_required": true,
+    "uri_scheme": "r2"
+  },
+  "safety": {
+    "production_writes": false,
+    "default_branch_mutation": false,
+    "signed_urls": false,
+    "credential_injection": false,
+    "test_only": true
+  }
+}

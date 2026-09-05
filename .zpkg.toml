@@ -14,4 +14,4 @@ url = "https://github.com/zed-pkg-test/api-contract-e2e"
 dir = ".vendor/.zed"
 
 [dependencies]
-"zed-pkg/zed-clients" = "^0.2.0"
+"zed-pkg/zed-clients" = "^0.1.0"

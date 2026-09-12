@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/zed-pkg-test/api-contract-e2e/contracts/json-schema/flat-widget.schema.json",
+  "$defs": {
+    "FlatWidget": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "FlatWidget",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "enabled": { "type": "boolean" }
+      },
+      "required": ["name", "enabled"],
+      "unevaluatedProperties": false
+    }
+  }
+}

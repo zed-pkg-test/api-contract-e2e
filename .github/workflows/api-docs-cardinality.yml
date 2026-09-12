@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  API_DOCS_SHA: af09dc3b14d2ff1f8cd8f0d9acb7803fddaca048
+  API_DOCS_SHA: f6efa12a3ce5a01713464df6168082c289d85716
   TJSV_SHA: 93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
 
 jobs:
@@ -54,8 +54,8 @@ jobs:
           set -euo pipefail
           test "$(git -C subject rev-parse HEAD)" = "$API_DOCS_SHA"
           test "$(git -C tjsv rev-parse HEAD)" = "$TJSV_SHA"
-          grep -F '@minItems(4)' subject/idl/typespec/docs-discovery.tsp
-          grep -F '@maxItems(4)' subject/idl/typespec/docs-discovery.tsp
+          grep -F '@TypeSpec.JsonSchema.extension("minItems", 4)' subject/idl/typespec/docs-discovery.tsp
+          grep -F '@TypeSpec.JsonSchema.extension("maxItems", 4)' subject/idl/typespec/docs-discovery.tsp
           jq -e '."$defs".DocsDiscoveryManifest.properties.aliases.minItems == 4 and ."$defs".DocsDiscoveryManifest.properties.aliases.maxItems == 4' \
             subject/json-schema/docs-discovery.schema.json
 

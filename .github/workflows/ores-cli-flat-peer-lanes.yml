@@ -1,0 +1,232 @@
+name: ores-cli flat peer lanes certificate
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ores-cli-flat-peer-lanes.yml'
+      - 'certification/ores-cli-flat-peer-lanes/**'
+      - 'contracts/typespec/visualization-query.tsp'
+      - 'contracts/json-schema/visualization-query.schema.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ores-cli-flat-peer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CERT_ROOT: certification/ores-cli-flat-peer-lanes
+  PRODUCT_HEAD: b499452d37679fd77d83025cbb53b212a2f6dd35
+  SCANNER_BLOB: 70f415ca1ec2060f6f06533a9d89df8b188f38ed
+  DISPATCHER_BLOB: 5812bab7f61acd31071da5bbc0d47eb8c3150e0f
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact test head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate workflow syntax
+        uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+        with:
+          args: .github/workflows/ores-cli-flat-peer-lanes.yml
+
+      - name: Prove exact product source identity and dispatcher composition
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          scanner="$CERT_ROOT/src/audit/split_peer_contracts.rs"
+          dispatcher="$CERT_ROOT/product-audit-mod.rs"
+          lock="$CERT_ROOT/source-lock.json"
+          test "$(git hash-object "$scanner")" = "$SCANNER_BLOB"
+          test "$(git hash-object "$dispatcher")" = "$DISPATCHER_BLOB"
+          jq -e --arg commit "$PRODUCT_HEAD" --arg scanner "$SCANNER_BLOB" --arg dispatcher "$DISPATCHER_BLOB" '
+            .schema == "ores.test.source-lock/v1" and
+            .repository == "ORESoftware/ores-cli" and
+            .pullRequest == 254 and
+            .commit == $commit and
+            .files["src/audit/split_peer_contracts.rs"] == $scanner and
+            .files["src/audit/mod.rs"] == $dispatcher and
+            .authorityModel.typespec == "independently-authored-first-class" and
+            .authorityModel.jsonSchema == "independently-authored-first-class" and
+            .authorityModel.typespecProjection == "generated-json-schema-b" and
+            .authorityModel.generatedJsonSchema == "comparison-evidence-only" and
+            .authorityModel.comparison == "generated-b-vs-authored-a" and
+            .authorityModel.precedence == "none"
+          ' "$lock"
+          grep -Fqx 'mod split_peer_contracts;' "$dispatcher"
+          grep -Fq 'split_peer_contracts::augment_split_peer_contract_audit(options, report)' "$dispatcher"
+          grep -Fq 'contract_tree::audit_contract_tree' "$dispatcher"
+          grep -Fq 'tjsv_full_check::augment_tjsv_full_check_audit(options, report)' "$dispatcher"
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: '1.95.0'
+          components: rustfmt, clippy
+
+      - name: Require exact scanner formatting
+        run: cargo +1.95.0 fmt --manifest-path "$CERT_ROOT/Cargo.toml" --all -- --check
+
+      - name: Compile exact scanner harness
+        run: cargo +1.95.0 check --manifest-path "$CERT_ROOT/Cargo.toml" --all-targets
+
+      - name: Run embedded flat-lane regressions
+        run: cargo +1.95.0 test --manifest-path "$CERT_ROOT/Cargo.toml" --all-targets -- --nocapture
+
+      - name: Deny Rust warnings
+        run: cargo +1.95.0 clippy --manifest-path "$CERT_ROOT/Cargo.toml" --all-targets -- -D warnings
+
+      - name: Repeat scanner regressions optimized
+        run: cargo +1.95.0 test --release --manifest-path "$CERT_ROOT/Cargo.toml" --all-targets
+
+      - name: Prove flat authored peer layout and freeze source hashes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -s contracts/typespec/visualization-query.tsp
+          test -s contracts/json-schema/visualization-query.schema.json
+          test ! -e contracts/json-schema/typespec.generated.schema.json
+          grep -Fq 'https://json-schema.org/draft/2020-12/schema' contracts/json-schema/visualization-query.schema.json
+          sha256sum contracts/typespec/visualization-query.tsp contracts/json-schema/visualization-query.schema.json > "$RUNNER_TEMP/flat-authorities.before.sha256"
+
+      - name: Compile TypeSpec to Schema B and compare with independently authored Schema A
+        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          typespec: contracts/typespec/visualization-query.tsp
+          schema: contracts/json-schema/visualization-query.schema.json
+          report: tmp/flat-positive/report.json
+          sarif: tmp/flat-positive/report.sarif
+          contract_ir: tmp/flat-positive/contract-ir.json
+          output_dir: tmp/flat-positive/generated
+          max_probes: '64'
+
+      - name: Re-verify consumer admission against both authored authorities
+        uses: ORESoftware/typespec-json-schema-validator/actions/test-consumer-admission@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          contract_ir: tmp/flat-positive/contract-ir.json
+          report: tmp/flat-positive/report.json
+          typespec: contracts/typespec/visualization-query.tsp
+          schema: contracts/json-schema/visualization-query.schema.json
+          generated_schema: tmp/flat-positive/generated/typespec.generated.schema.json
+          expected_declarations: '["FlatVisualizationQuery.VisualizationQueryV1"]'
+          verification: tmp/flat-positive/verification.json
+
+      - name: Assert peer authority roles and executed generated-B versus authored-A comparison
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node --input-type=module <<'NODE'
+          import { readFile, realpath } from 'node:fs/promises';
+          const [ir, report, authoredReal, generatedReal] = await Promise.all([
+            readFile('tmp/flat-positive/contract-ir.json', 'utf8').then(JSON.parse),
+            readFile('tmp/flat-positive/report.json', 'utf8').then(JSON.parse),
+            realpath('contracts/json-schema/visualization-query.schema.json'),
+            realpath('tmp/flat-positive/generated/typespec.generated.schema.json'),
+          ]);
+          const expected = {
+            typespec: 'independently-authored',
+            jsonSchema: 'independently-authored',
+            generatedJsonSchema: 'comparison-evidence-only',
+            precedence: 'none',
+          };
+          for (const [key, value] of Object.entries(expected)) {
+            if (ir.authorities?.[key] !== value) throw new Error(`unexpected authority ${key}: ${JSON.stringify(ir.authorities?.[key])}`);
+          }
+          if (report.authorities?.typespec?.authority !== 'independently-authored') throw new Error('TypeSpec lost first-class authority');
+          if (report.authorities?.jsonSchema?.authority !== 'independently-authored') throw new Error('JSON Schema lost first-class authority');
+          if (report.authorities?.precedence !== 'none') throw new Error('an authored authority received precedence');
+          if (report.authorities?.typespec?.generatedJsonSchemaRole !== 'comparison-evidence-only') throw new Error('generated Schema B was promoted to authority');
+          if (report.coverage?.typespecGeneratedJsonSchemaComparison !== true) throw new Error('Schema B versus Schema A comparison did not execute');
+          if (authoredReal === generatedReal) throw new Error('authored Schema A aliases generated Schema B');
+          NODE
+          test -s tmp/flat-positive/generated/typespec.generated.schema.json
+          test ! -e contracts/json-schema/typespec.generated.schema.json
+
+      - name: Prepare JSON-Schema-only drift
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p tmp/flat-json-negative
+          node <<'NODE'
+          const fs = require('node:fs');
+          const drift = JSON.parse(fs.readFileSync('contracts/json-schema/visualization-query.schema.json', 'utf8'));
+          drift.$defs.VisualizationQueryV1.properties.limit.maximum = 499;
+          fs.writeFileSync('tmp/flat-json-negative/authored-drift.schema.json', `${JSON.stringify(drift, null, 2)}\n`);
+          NODE
+
+      - name: JSON-Schema-only drift must fail
+        id: json_drift
+        continue-on-error: true
+        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          typespec: contracts/typespec/visualization-query.tsp
+          schema: tmp/flat-json-negative/authored-drift.schema.json
+          report: tmp/flat-json-negative/report.json
+          sarif: tmp/flat-json-negative/report.sarif
+          contract_ir: tmp/flat-json-negative/contract-ir.json
+          output_dir: tmp/flat-json-negative/generated
+          max_probes: '32'
+
+      - name: Require JSON-Schema-only drift refusal after A/B comparison
+        if: always()
+        env:
+          OUTCOME: ${{ steps.json_drift.outcome }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$OUTCOME" = failure
+          test -s tmp/flat-json-negative/generated/typespec.generated.schema.json
+          node -e "const r=require('./tmp/flat-json-negative/report.json'); if(r.status!=='stopped_for_evaluation'||r.coverage?.typespecGeneratedJsonSchemaComparison!==true) process.exit(1)"
+
+      - name: Prepare TypeSpec-only drift
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p tmp/flat-typespec-negative
+          sed 's/@maxValue(500)/@maxValue(499)/' contracts/typespec/visualization-query.tsp > tmp/flat-typespec-negative/drift.tsp
+          grep -Fq '@maxValue(499)' tmp/flat-typespec-negative/drift.tsp
+          grep -Fq '@maxValue(500)' contracts/typespec/visualization-query.tsp
+
+      - name: TypeSpec-only drift must fail after transpilation
+        id: typespec_drift
+        continue-on-error: true
+        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          typespec: tmp/flat-typespec-negative/drift.tsp
+          schema: contracts/json-schema/visualization-query.schema.json
+          report: tmp/flat-typespec-negative/report.json
+          sarif: tmp/flat-typespec-negative/report.sarif
+          contract_ir: tmp/flat-typespec-negative/contract-ir.json
+          output_dir: tmp/flat-typespec-negative/generated
+          max_probes: '32'
+
+      - name: Require TypeSpec-only drift refusal after generated-B versus authored-A comparison
+        if: always()
+        env:
+          OUTCOME: ${{ steps.typespec_drift.outcome }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$OUTCOME" = failure
+          test -s tmp/flat-typespec-negative/generated/typespec.generated.schema.json
+          node -e "const r=require('./tmp/flat-typespec-negative/report.json'); if(r.status!=='stopped_for_evaluation'||r.coverage?.typespecGeneratedJsonSchemaComparison!==true) process.exit(1)"
+
+      - name: Prove authored sources and mirrored product source remained immutable
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sha256sum contracts/typespec/visualization-query.tsp contracts/json-schema/visualization-query.schema.json > "$RUNNER_TEMP/flat-authorities.after.sha256"
+          cmp "$RUNNER_TEMP/flat-authorities.before.sha256" "$RUNNER_TEMP/flat-authorities.after.sha256"
+          test "$(git hash-object "$CERT_ROOT/src/audit/split_peer_contracts.rs")" = "$SCANNER_BLOB"
+          test "$(git hash-object "$CERT_ROOT/product-audit-mod.rs")" = "$DISPATCHER_BLOB"
+          git diff --exit-code -- "$CERT_ROOT" contracts/typespec/visualization-query.tsp contracts/json-schema/visualization-query.schema.json .github/workflows/ores-cli-flat-peer-lanes.yml

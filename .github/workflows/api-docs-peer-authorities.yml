@@ -1,0 +1,188 @@
+name: api-docs peer-authority canary
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/api-docs-peer-authorities.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-docs-peer-authorities-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  peer-authorities:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact canary head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          show-progress: false
+          fetch-depth: 1
+
+      - name: Verify exact canary head
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Check out exact API Docs candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ORESoftware/api-docs
+          ref: 46e55b066815fc9f5f2c6c2c749ae1906ec40593
+          path: subject
+          persist-credentials: false
+          show-progress: false
+          fetch-depth: 1
+
+      - name: Verify API Docs candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C subject rev-parse HEAD)" = "46e55b066815fc9f5f2c6c2c749ae1906ec40593"
+
+      - name: Check out canonical TJSV
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ORESoftware/typespec-json-schema-validator
+          ref: 93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+          path: tjsv
+          persist-credentials: false
+          show-progress: false
+          fetch-depth: 1
+
+      - name: Install Node 22.23.1
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.23.1"
+          package-manager-cache: false
+
+      - name: Install and verify immutable TJSV toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C tjsv rev-parse HEAD)" = "93dd73cb246a09b0a1c62d7192cc62ca6ecbe405"
+          npm ci --prefix tjsv --ignore-scripts --no-audit --no-fund
+          npm rebuild --prefix tjsv @oresoftware/f2e --foreground-scripts
+          node tjsv/bin/typespec-json-schema-validator.mjs doctor --quiet
+          git -C tjsv diff --exit-code -- .
+
+      - name: Compile TypeSpec and compare every API Docs peer authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=".typespec-json-schema-validator/api-docs"
+          mkdir -p "$evidence"
+
+          run_pair() {
+            local name="$1"
+            local typespec="$2"
+            local schema="$3"
+            local instances="${4:-}"
+            local mapping="${5:-}"
+            local int64_strategy="${6:-string}"
+            local out="$evidence/$name"
+            mkdir -p "$out/generated"
+
+            args=(
+              check
+              "--typespec=subject/$typespec"
+              "--schema=subject/$schema"
+              "--report=$out/report.json"
+              "--sarif=$out/report.sarif"
+              "--contract-ir=$out/contract-ir.json"
+              "--output-dir=$out/generated"
+              "--bundle-id=$name.typespec.generated.schema.json"
+              "--max-findings=100"
+              "--max-probes=64"
+              "--int64-strategy=$int64_strategy"
+              --quiet
+            )
+            if [[ -n "$instances" ]]; then
+              args+=("--instances=subject/$instances")
+            fi
+            if [[ -n "$mapping" ]]; then
+              args+=("--mapping=subject/$mapping")
+            fi
+
+            node tjsv/bin/typespec-json-schema-validator.mjs "${args[@]}"
+
+            jq -e '
+              .schema == "ores.typespec-json-schema-validator.report/v1" and
+              .status == "passed" and
+              .zeroUnexplainedFindings == true and
+              .authorities.precedence == "none" and
+              .authorities.typespec.authority == "independently-authored" and
+              .authorities.jsonSchema.authority == "independently-authored" and
+              .authorities.typespec.generatedJsonSchemaRole == "comparison-evidence-only" and
+              (.coverage.generatedAuthoredComparison // false) == true and
+              (.coverage.differentialInstanceValidation // false) == true and
+              (.differential.summary.probesEvaluated // 0) > 0 and
+              (.differential.summary.divergences // 0) == 0 and
+              (.differential.summary.refusals // 0) == 0
+            ' "$out/report.json"
+            jq -e '
+              .schema == "ores.typespec-json-schema-validator.contract-ir/v1" and
+              .status == "passed" and
+              .admissible == true and
+              .role == "downstream-derived-parity-artifact" and
+              .editableAuthority == false
+            ' "$out/contract-ir.json"
+            test -s "$out/generated/$name.typespec.generated.schema.json"
+          }
+
+          run_pair \
+            docs-discovery \
+            idl/typespec/docs-discovery.tsp \
+            json-schema/docs-discovery.schema.json
+
+          run_pair \
+            http-request-surface \
+            idl/typespec/http/request-surface.tsp \
+            json-schema/http-request-surface.schema.json \
+            idl/typespec/http/instances
+
+          run_pair \
+            ores-rpc-config \
+            contracts/ores-rpc-config/typespec/main.tsp \
+            contracts/ores-rpc-config/json-schema/ores-rpc-config.schema.json \
+            "" \
+            contracts/ores-rpc-config/tjsv.mapping.json \
+            number
+
+          run_pair \
+            form-validation \
+            form-validation/contracts/main.tsp \
+            form-validation/contracts/authored.schema.json
+
+          run_pair \
+            form-validation-admission-profiles \
+            form-validation/admission-profiles/main.tsp \
+            form-validation/admission-profiles/authored.schema.json
+
+      - name: Prove authored API Docs sources were not rewritten
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C subject diff --exit-code -- .
+          git -C tjsv diff --exit-code -- .
+
+      - name: Retain peer-authority evidence
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: api-docs-peer-authorities-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .typespec-json-schema-validator/api-docs
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30

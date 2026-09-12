@@ -1,0 +1,98 @@
+name: nested split peer-contract fixture
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ores-cli-nested-split-canary.yml'
+      - 'contracts/claritas-nested-fixture/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nested-split-peer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture-admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact test head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Prove Claritas-style nested authority layout
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          root='contracts/claritas-nested-fixture'
+          test -s "$root/typespec/main.tsp"
+          test -s "$root/json-schema/visualization-query.schema.json"
+          test ! -e "$root/json-schema/typespec.generated.schema.json"
+          test "$(find "$root/typespec" -maxdepth 1 -type f -name 'main.tsp' | wc -l)" -eq 1
+          test "$(find "$root/json-schema" -maxdepth 1 -type f -name '*.schema.json' ! -name '*.generated.*' | wc -l)" -eq 1
+          grep -Fq 'https://json-schema.org/draft/2020-12/schema' "$root/json-schema/visualization-query.schema.json"
+
+      - name: Compile TypeSpec to comparison Schema B and compare with authored Schema A
+        uses: ORESoftware/typespec-json-schema-validator@1f74cdf2791343fb3b3ba82570ef7d0318d08d27
+        with:
+          typespec: contracts/claritas-nested-fixture/typespec/main.tsp
+          schema: contracts/claritas-nested-fixture/json-schema/visualization-query.schema.json
+          report: tmp/nested-positive/report.json
+          sarif: tmp/nested-positive/report.sarif
+          contract_ir: tmp/nested-positive/contract-ir.json
+          output_dir: tmp/nested-positive/generated
+          max_probes: '64'
+
+      - name: Re-verify declaration admission against both authored peers
+        uses: ORESoftware/typespec-json-schema-validator/actions/test-consumer-admission@1f74cdf2791343fb3b3ba82570ef7d0318d08d27
+        with:
+          contract_ir: tmp/nested-positive/contract-ir.json
+          report: tmp/nested-positive/report.json
+          typespec: contracts/claritas-nested-fixture/typespec/main.tsp
+          schema: contracts/claritas-nested-fixture/json-schema/visualization-query.schema.json
+          generated_schema: tmp/nested-positive/generated/typespec.generated.schema.json
+          expected_declarations: '["ClaritasVisualizationQuery.VisualizationQueryV1"]'
+          verification: tmp/nested-positive/verification.json
+
+      - name: Prove generated Schema B stayed outside authored JSON Schema lane
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -s tmp/nested-positive/generated/typespec.generated.schema.json
+          test ! -e contracts/claritas-nested-fixture/json-schema/typespec.generated.schema.json
+          git diff --exit-code -- contracts/claritas-nested-fixture/typespec/main.tsp contracts/claritas-nested-fixture/json-schema/visualization-query.schema.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const input = 'contracts/claritas-nested-fixture/json-schema/visualization-query.schema.json';
+          const drift = JSON.parse(fs.readFileSync(input, 'utf8'));
+          drift.$defs.VisualizationQueryV1.properties.limit.maximum = 499;
+          fs.mkdirSync('tmp/nested-negative', {recursive: true});
+          fs.writeFileSync('tmp/nested-negative/authored-drift.schema.json', `${JSON.stringify(drift, null, 2)}\n`);
+          NODE
+
+      - name: One-sided authored JSON Schema drift must fail
+        id: drift
+        continue-on-error: true
+        uses: ORESoftware/typespec-json-schema-validator@1f74cdf2791343fb3b3ba82570ef7d0318d08d27
+        with:
+          typespec: contracts/claritas-nested-fixture/typespec/main.tsp
+          schema: tmp/nested-negative/authored-drift.schema.json
+          report: tmp/nested-negative/report.json
+          sarif: tmp/nested-negative/report.sarif
+          contract_ir: tmp/nested-negative/contract-ir.json
+          output_dir: tmp/nested-negative/generated
+          max_probes: '32'
+
+      - name: Require drift refusal and immutable authored peers
+        env:
+          DRIFT_OUTCOME: ${{ steps.drift.outcome }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$DRIFT_OUTCOME" = failure
+          git diff --exit-code -- contracts/claritas-nested-fixture/typespec/main.tsp contracts/claritas-nested-fixture/json-schema/visualization-query.schema.json

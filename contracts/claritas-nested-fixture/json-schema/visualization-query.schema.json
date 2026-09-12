@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/claritas-viz-test/contract-conformance-tests/contracts/visualization-query/authored.schema.json",
+  "$defs": {
+    "VisualizationQueryV1": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "VisualizationQueryV1",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1
+        },
+        "dataset_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "view_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "include_archived": {
+          "type": "boolean"
+        }
+      },
+      "required": ["version", "dataset_id", "view_id", "limit"],
+      "unevaluatedProperties": false
+    }
+  }
+}

@@ -124,7 +124,7 @@ jobs:
               .authorities.typespec.authority == "independently-authored" and
               .authorities.jsonSchema.authority == "independently-authored" and
               .authorities.typespec.generatedJsonSchemaRole == "comparison-evidence-only" and
-              (.coverage.generatedAuthoredComparison // false) == true and
+              (.coverage.typespecGeneratedJsonSchemaComparison // false) == true and
               (.coverage.differentialInstanceValidation // false) == true and
               (.differential.summary.probesEvaluated // 0) > 0 and
               (.differential.summary.divergences // 0) == 0 and

@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ORESoftware/api-docs
-          ref: f6bc8771365ee79cf72d53d640ea5c296b0e2dd1
+          ref: af09dc3b14d2ff1f8cd8f0d9acb7803fddaca048
           path: subject
           persist-credentials: false
           show-progress: false
@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C subject rev-parse HEAD)" = "f6bc8771365ee79cf72d53d640ea5c296b0e2dd1"
+          test "$(git -C subject rev-parse HEAD)" = "af09dc3b14d2ff1f8cd8f0d9acb7803fddaca048"
 
       - name: Check out canonical TJSV
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

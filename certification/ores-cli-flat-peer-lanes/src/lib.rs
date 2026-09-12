@@ -85,6 +85,8 @@ pub mod model {
 pub mod audit {
     use std::path::PathBuf;
 
+    use crate::model::CommandReport;
+
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct RepositoryAuditOptions {
         pub path: PathBuf,
@@ -94,6 +96,13 @@ pub mod audit {
 
     #[path = "split_peer_contracts.rs"]
     pub mod split_peer_contracts;
+
+    pub fn run_split_peer_contract_audit(
+        options: &RepositoryAuditOptions,
+        report: CommandReport,
+    ) -> CommandReport {
+        split_peer_contracts::augment_split_peer_contract_audit(options, report)
+    }
 }
 
 pub fn smoke_options(path: PathBuf) -> audit::RepositoryAuditOptions {

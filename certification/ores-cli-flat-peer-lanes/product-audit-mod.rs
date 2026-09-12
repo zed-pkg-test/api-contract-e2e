@@ -37,8 +37,6 @@ mod tjsv_invocation_scope;
 mod tjsv_workflow_revision;
 mod workflow_action_pins;
 mod workflow_permissions;
-mod workflow_tjsv_inputs;
-mod workflow_tjsv_step_pairing;
 
 use std::path::PathBuf;
 
@@ -50,16 +48,14 @@ pub use package::audit_package;
 use crate::model::CommandReport;
 
 /// Audit one local repository tree, recursively inspect independently authored
-/// TypeSpec/JSON Schema peers, including flat `contracts/typespec` and
-/// `contracts/json-schema` peer lanes, enforce physical independence plus
-/// separation between editable authorities and generated TJSV comparison
-/// evidence, validate OAuth/OIDC provider source, workflow and `*-test` evidence
-/// boundaries, require symmetric fail-closed TJSV drift controls, forbid
-/// authored-Schema-A/generated-Schema-B cloning, require a full compiler/emitter/
-/// comparison/differential `tjsv check` for every complete peer pair, require one
-/// command-atomic scoped invocation per workflow admission, require explicit
-/// current TypeSpec, authored Schema A, report, Contract IR and generated-output
-/// bindings plus a fresh same-workflow current-input verifier, require internally
+/// TypeSpec/JSON Schema peers, including flat `contracts/typespec/<slice>.tsp`
+/// plus `contracts/json-schema/<slice>.schema.json` lanes, enforce physical
+/// independence plus separation between editable authorities and generated TJSV
+/// comparison evidence, validate OAuth/OIDC provider source, workflow and
+/// `*-test` evidence boundaries, require symmetric fail-closed TJSV drift
+/// controls, forbid authored-Schema-A/generated-Schema-B cloning, require a full
+/// compiler/emitter/comparison/differential `tjsv check` for every complete peer
+/// pair, require one scoped invocation per workflow admission, require internally
 /// consistent immutable TJSV workflow revisions, reject mutable GitHub Actions
 /// dependencies, require explicit workflow-token posture and immutable
 /// Docker/Cargo Git identities, fail closed on unknown ORES runtime TOML names,
@@ -86,9 +82,6 @@ pub fn audit_repository(options: &RepositoryAuditOptions) -> CommandReport {
     );
     let report = tjsv_full_check::augment_tjsv_full_check_audit(options, report);
     let report = tjsv_invocation_scope::augment_tjsv_invocation_scope_audit(options, report);
-    let report = workflow_tjsv_inputs::augment_workflow_tjsv_input_audit(options, report);
-    let report =
-        workflow_tjsv_step_pairing::augment_workflow_tjsv_step_pairing_audit(options, report);
     let report = tjsv_workflow_revision::augment_tjsv_workflow_revision_audit(options, report);
     let report = workflow_action_pins::augment_workflow_action_pin_audit(options, report);
     let report = workflow_permissions::augment_workflow_permissions_audit(options, report);

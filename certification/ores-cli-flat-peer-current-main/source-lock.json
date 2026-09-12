@@ -1,0 +1,18 @@
+{
+  "schema": "ores.test.source-lock/v1",
+  "repository": "ORESoftware/ores-cli",
+  "pullRequest": 254,
+  "commit": "1cfab0a826fa6274e9dc6f8badd25685dea4d43a",
+  "files": {
+    "src/audit/split_peer_contracts.rs": "70f415ca1ec2060f6f06533a9d89df8b188f38ed",
+    "src/audit/mod.rs": "0288645774ab8318ed28adac241ccd69c9459785"
+  },
+  "authorityModel": {
+    "typespec": "independently-authored-first-class",
+    "jsonSchema": "independently-authored-first-class",
+    "typespecProjection": "generated-json-schema-b",
+    "generatedJsonSchema": "comparison-evidence-only",
+    "comparison": "generated-b-vs-authored-a",
+    "precedence": "none"
+  }
+}

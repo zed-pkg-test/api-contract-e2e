@@ -1,0 +1,148 @@
+name: ores-cli flat peer current-main certificate
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ores-cli-flat-peer-current-main.yml'
+      - 'certification/ores-cli-flat-peer-current-main/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  HARNESS_ROOT: certification/ores-cli-flat-peer-lanes
+  CERT_ROOT: certification/ores-cli-flat-peer-current-main
+  PRODUCT_HEAD: 1cfab0a826fa6274e9dc6f8badd25685dea4d43a
+  SCANNER_BLOB: 70f415ca1ec2060f6f06533a9d89df8b188f38ed
+  DISPATCHER_BLOB: 0288645774ab8318ed28adac241ccd69c9459785
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact certificate head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify exact candidate identity and authority model
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object "$HARNESS_ROOT/src/audit/split_peer_contracts.rs")" = "$SCANNER_BLOB"
+          test "$(git hash-object "$CERT_ROOT/product-audit-mod.rs")" = "$DISPATCHER_BLOB"
+          jq -e --arg commit "$PRODUCT_HEAD" --arg scanner "$SCANNER_BLOB" --arg dispatcher "$DISPATCHER_BLOB" '
+            .commit == $commit and
+            .files["src/audit/split_peer_contracts.rs"] == $scanner and
+            .files["src/audit/mod.rs"] == $dispatcher and
+            .authorityModel.typespec == "independently-authored-first-class" and
+            .authorityModel.jsonSchema == "independently-authored-first-class" and
+            .authorityModel.typespecProjection == "generated-json-schema-b" and
+            .authorityModel.generatedJsonSchema == "comparison-evidence-only" and
+            .authorityModel.comparison == "generated-b-vs-authored-a" and
+            .authorityModel.precedence == "none"
+          ' "$CERT_ROOT/source-lock.json"
+          grep -Fqx 'mod split_peer_contracts;' "$CERT_ROOT/product-audit-mod.rs"
+          grep -Fq 'split_peer_contracts::augment_split_peer_contract_audit(options, report)' "$CERT_ROOT/product-audit-mod.rs"
+          grep -Fq 'workflow_tjsv_inputs::augment_workflow_tjsv_input_audit(options, report)' "$CERT_ROOT/product-audit-mod.rs"
+          grep -Fq 'workflow_tjsv_step_pairing::augment_workflow_tjsv_step_pairing_audit(options, report)' "$CERT_ROOT/product-audit-mod.rs"
+          grep -Fq 'tjsv_invocation_scope::augment_tjsv_invocation_scope_audit(options, report)' "$CERT_ROOT/product-audit-mod.rs"
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: '1.95.0'
+          components: rustfmt, clippy
+
+      - name: Re-run exact scanner Rust gates
+        run: |
+          set -euo pipefail
+          cargo +1.95.0 fmt --manifest-path "$HARNESS_ROOT/Cargo.toml" --all -- --check
+          cargo +1.95.0 check --manifest-path "$HARNESS_ROOT/Cargo.toml" --all-targets
+          cargo +1.95.0 test --manifest-path "$HARNESS_ROOT/Cargo.toml" --all-targets -- --nocapture
+          cargo +1.95.0 clippy --manifest-path "$HARNESS_ROOT/Cargo.toml" --all-targets -- -D warnings
+
+      - name: Set up tested Node runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+
+      - name: TypeSpec to Schema B versus authored Schema A must converge
+        uses: ORESoftware/typespec-json-schema-validator@07688e1eea92a666f7e8647038c9f2c1544440ed
+        with:
+          typespec: contracts/typespec/visualization-query.tsp
+          schema: contracts/json-schema/visualization-query.schema.json
+          report: tmp/current-main-positive/report.json
+          contract_ir: tmp/current-main-positive/contract-ir.json
+          output_dir: tmp/current-main-positive/generated
+          max_probes: '64'
+
+      - name: Require current evidence against both authored authorities
+        uses: ORESoftware/typespec-json-schema-validator/actions/test-consumer-admission@07688e1eea92a666f7e8647038c9f2c1544440ed
+        with:
+          contract_ir: tmp/current-main-positive/contract-ir.json
+          report: tmp/current-main-positive/report.json
+          typespec: contracts/typespec/visualization-query.tsp
+          schema: contracts/json-schema/visualization-query.schema.json
+          generated_schema: tmp/current-main-positive/generated/typespec.generated.schema.json
+          expected_declarations: '["FlatVisualizationQuery.VisualizationQueryV1"]'
+          verification: tmp/current-main-positive/verification.json
+
+      - name: Prepare TypeSpec-only drift
+        run: |
+          mkdir -p tmp/current-main-typespec-drift
+          sed 's/@maxValue(500)/@maxValue(499)/' contracts/typespec/visualization-query.tsp > tmp/current-main-typespec-drift/drift.tsp
+
+      - name: TypeSpec-only drift must fail after transpilation
+        id: typespec_drift
+        continue-on-error: true
+        uses: ORESoftware/typespec-json-schema-validator@07688e1eea92a666f7e8647038c9f2c1544440ed
+        with:
+          typespec: tmp/current-main-typespec-drift/drift.tsp
+          schema: contracts/json-schema/visualization-query.schema.json
+          report: tmp/current-main-typespec-drift/report.json
+          contract_ir: tmp/current-main-typespec-drift/contract-ir.json
+          output_dir: tmp/current-main-typespec-drift/generated
+          max_probes: '32'
+
+      - name: Assert TypeSpec-only drift refusal
+        env:
+          OUTCOME: ${{ steps.typespec_drift.outcome }}
+        run: test "$OUTCOME" = failure
+
+      - name: Prepare JSON-Schema-only drift
+        run: |
+          mkdir -p tmp/current-main-json-drift
+          node <<'NODE'
+          const fs = require('node:fs');
+          const schema = JSON.parse(fs.readFileSync('contracts/json-schema/visualization-query.schema.json', 'utf8'));
+          schema.$defs.VisualizationQueryV1.properties.limit.maximum = 499;
+          fs.writeFileSync('tmp/current-main-json-drift/drift.schema.json', `${JSON.stringify(schema, null, 2)}\n`);
+          NODE
+
+      - name: JSON-Schema-only drift must fail comparison
+        id: schema_drift
+        continue-on-error: true
+        uses: ORESoftware/typespec-json-schema-validator@07688e1eea92a666f7e8647038c9f2c1544440ed
+        with:
+          typespec: contracts/typespec/visualization-query.tsp
+          schema: tmp/current-main-json-drift/drift.schema.json
+          report: tmp/current-main-json-drift/report.json
+          contract_ir: tmp/current-main-json-drift/contract-ir.json
+          output_dir: tmp/current-main-json-drift/generated
+          max_probes: '32'
+
+      - name: Assert JSON-Schema-only drift refusal
+        env:
+          OUTCOME: ${{ steps.schema_drift.outcome }}
+        run: test "$OUTCOME" = failure
+
+      - name: Prove authored authorities and certificate sources stayed immutable
+        run: |
+          test "$(git hash-object "$HARNESS_ROOT/src/audit/split_peer_contracts.rs")" = "$SCANNER_BLOB"
+          test "$(git hash-object "$CERT_ROOT/product-audit-mod.rs")" = "$DISPATCHER_BLOB"
+          git diff --exit-code -- contracts/typespec/visualization-query.tsp contracts/json-schema/visualization-query.schema.json "$HARNESS_ROOT" "$CERT_ROOT"

@@ -1,0 +1,108 @@
+name: ores-cli Zed package.kind canary
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ores-cli-zpkg-kind-canary.yml'
+      - 'certification/ores-cli-zpkg-kind/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ores-zpkg-kind-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify exact candidate and product lint blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$(git hash-object certification/ores-cli-zpkg-kind/src/audit/zpkg_manifest.rs)" = e78a7636df785fbf4746436325bbbc8b38d46184
+
+      - name: Install Rust 1.95
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: 1.95.0
+          components: rustfmt,clippy
+
+      - name: Certify exact ores-cli lint
+        working-directory: certification/ores-cli-zpkg-kind
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.95.0 generate-lockfile
+          cargo +1.95.0 fmt --all -- --check
+          cargo +1.95.0 check --locked --all-targets
+          cargo +1.95.0 clippy --locked --all-targets -- -D warnings
+          cargo +1.95.0 test --locked --all-targets -- --nocapture
+          cargo +1.95.0 test --release --locked --all-targets
+
+      - name: Install checksum-pinned Zed v0.3.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/zed.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/zed-pkg/zed-cli/releases/download/v0.3.0/zed-x86_64-unknown-linux-musl.tar.gz \
+            -o "$archive"
+          echo "e380240c96242ab3b29e0e9d14c95ba946d086f20f0732e34d0e5cf47513efc7  $archive" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/zed-bin"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/zed-bin"
+          echo "$RUNNER_TEMP/zed-bin" >> "$GITHUB_PATH"
+
+      - name: Require Zed to accept canonical shape and reject package.kind
+        shell: bash
+        run: |
+          set -euo pipefail
+          good="$RUNNER_TEMP/zpkg-good"
+          bad="$RUNNER_TEMP/zpkg-bad"
+          mkdir -p "$good" "$bad"
+          cat > "$good/.zpkg.toml" <<'TOML'
+          [package]
+          org = "zed-pkg"
+          name = "zed-e2e"
+          version = "0.1.0"
+          description = "Zed validation fixture"
+          license = "MIT"
+          language = "typescript"
+
+          [package.repository]
+          vcs = "git"
+          url = "https://github.com/zed-pkg/zed-e2e"
+
+          [install]
+          adapter = "none"
+          dir = ".vendor/.zed"
+
+          [targets.repository]
+          dir = "."
+
+          [scripts]
+          test = "true"
+          TOML
+          cp "$good/.zpkg.toml" "$bad/.zpkg.toml"
+          sed -i '/version = "0.1.0"/a kind = "pub-lib-core"' "$bad/.zpkg.toml"
+          (cd "$good" && zed validate)
+          set +e
+          (cd "$bad" && zed validate) >"$RUNNER_TEMP/bad.out" 2>&1
+          status=$?
+          set -e
+          test "$status" -ne 0
+          grep -Ei 'kind|unknown|invalid|manifest' "$RUNNER_TEMP/bad.out"
+
+      - name: Prove certificate sources remained immutable
+        run: git diff --exit-code -- certification/ores-cli-zpkg-kind .github/workflows/ores-cli-zpkg-kind-canary.yml

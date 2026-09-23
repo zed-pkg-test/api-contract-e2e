@@ -1,0 +1,68 @@
+name: ores-stack 279 exact-head proof
+
+on:
+  push:
+    branches:
+      - proof/ores-stack-279-64b9ee3c
+    paths:
+      - '.github/workflows/ores-stack-279-exact-head-proof.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ores-stack-279-exact-head-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Require organization-managed private-source credential
+        env:
+          TEST_FLEET_READ_TOKEN: ${{ secrets.TEST_FLEET_READ_TOKEN }}
+        run: test -n "$TEST_FLEET_READ_TOKEN"
+
+      - name: Check out immutable ores-stack PR head
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          repository: ORESoftware/ores-stack
+          ref: 64b9ee3c5be16c55f67fec896df0990ccdf752a0
+          token: ${{ secrets.TEST_FLEET_READ_TOKEN }}
+          path: ores-stack
+          persist-credentials: false
+          show-progress: false
+
+      - name: Assert immutable source identity
+        working-directory: ores-stack
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "64b9ee3c5be16c55f67fec896df0990ccdf752a0"
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Rustfmt workspace
+        working-directory: ores-stack
+        run: cargo fmt --all -- --check
+
+      - name: Check workspace with locked dependency graph
+        working-directory: ores-stack
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+        run: cargo check --workspace --all-targets --locked
+
+      - name: Test workspace with locked dependency graph
+        working-directory: ores-stack
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+        run: cargo test --workspace --locked
+
+      - name: Check AWS and GCP lambda runtime
+        working-directory: ores-stack
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+        run: |
+          set -euo pipefail
+          cargo fmt --manifest-path crates/ores-lambda-runtime/Cargo.toml -- --check
+          cargo check --manifest-path crates/ores-lambda-runtime/Cargo.toml --all-features
+          cargo test --manifest-path crates/ores-lambda-runtime/Cargo.toml --all-features

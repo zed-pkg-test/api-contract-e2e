@@ -1,7 +1,13 @@
 use axum::http::{HeaderMap, StatusCode};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, env, fs, path::{Path, PathBuf}};
+use std::{
+    collections::HashSet,
+    env,
+    fs::{self, OpenOptions},
+    io::Read,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
@@ -190,10 +196,38 @@ fn required_secret_file(name: &str, min_bytes: usize, max_bytes: usize) -> Resul
     let path = env::var_os(name)
         .map(PathBuf::from)
         .ok_or_else(|| SecurityError::Unavailable(format!("{name} is required")))?;
-    validate_secret_path(name, &path)?;
-    let mut body = fs::read(&path).map_err(|error| {
-        SecurityError::Unavailable(format!("read {name} {}: {error}", path.display()))
+    let before = validate_secret_path(name, &path)?;
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
+    }
+    let mut file = options.open(&path).map_err(|error| {
+        SecurityError::Unavailable(format!("open {name} {}: {error}", path.display()))
     })?;
+    let opened = file.metadata().map_err(|error| {
+        SecurityError::Unavailable(format!("read {name} metadata: {error}"))
+    })?;
+    validate_open_secret_metadata(name, &opened)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != opened.dev() || before.ino() != opened.ino() {
+            return Err(SecurityError::Unavailable(format!(
+                "{name} changed while being opened"
+            )));
+        }
+    }
+
+    let mut body = Vec::new();
+    (&mut file)
+        .take((max_bytes as u64) + 1)
+        .read_to_end(&mut body)
+        .map_err(|error| {
+            SecurityError::Unavailable(format!("read {name} {}: {error}", path.display()))
+        })?;
     while matches!(body.last(), Some(b'\n' | b'\r')) {
         body.pop();
     }
@@ -209,7 +243,7 @@ fn required_secret_file(name: &str, min_bytes: usize, max_bytes: usize) -> Resul
         .map_err(|_| SecurityError::Unavailable(format!("{name} must contain UTF-8 text")))
 }
 
-fn validate_secret_path(name: &str, path: &Path) -> Result<(), SecurityError> {
+fn validate_secret_path(name: &str, path: &Path) -> Result<fs::Metadata, SecurityError> {
     if !path.is_absolute() {
         return Err(SecurityError::Unavailable(format!(
             "{name} must be an absolute path"
@@ -221,6 +255,16 @@ fn validate_secret_path(name: &str, path: &Path) -> Result<(), SecurityError> {
     if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
         return Err(SecurityError::Unavailable(format!(
             "{name} must reference a regular non-symlink file"
+        )));
+    }
+    validate_open_secret_metadata(name, &metadata)?;
+    Ok(metadata)
+}
+
+fn validate_open_secret_metadata(name: &str, metadata: &fs::Metadata) -> Result<(), SecurityError> {
+    if !metadata.file_type().is_file() {
+        return Err(SecurityError::Unavailable(format!(
+            "{name} must reference a regular file"
         )));
     }
     #[cfg(unix)]

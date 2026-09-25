@@ -1,0 +1,29 @@
+name: prove-bmscl-api-server-pr11
+
+on:
+  push:
+    branches: [proof/bmscl-api-server-pr11]
+    paths:
+      - proof/bmscl-api-server-pr11/**
+      - .github/workflows/prove-bmscl-api-server-pr11.yml
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: proof/bmscl-api-server-pr11
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: proof/bmscl-api-server-pr11
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo test --all-targets
+      - run: cargo fmt --all -- --check

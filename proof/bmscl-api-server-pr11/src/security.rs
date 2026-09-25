@@ -76,11 +76,8 @@ impl SecurityClient {
     pub fn from_env(client: Client) -> Result<Self, SecurityError> {
         let auth_introspection_url = required_url("BMSCL_AUTH_INTROSPECTION_URL")?;
         let security_state_url = required_url("BMSCL_SECURITY_STATE_URL")?;
-        let security_state_service_token = required_secret_file(
-            "BMSCL_SECURITY_STATE_SERVICE_TOKEN_FILE",
-            32,
-            4096,
-        )?;
+        let security_state_service_token =
+            required_secret_file("BMSCL_SECURITY_STATE_SERVICE_TOKEN_FILE", 32, 4096)?;
         Ok(Self {
             client,
             auth_introspection_url,
@@ -192,7 +189,11 @@ fn required_url(name: &str) -> Result<String, SecurityError> {
     Ok(value)
 }
 
-fn required_secret_file(name: &str, min_bytes: usize, max_bytes: usize) -> Result<String, SecurityError> {
+fn required_secret_file(
+    name: &str,
+    min_bytes: usize,
+    max_bytes: usize,
+) -> Result<String, SecurityError> {
     let path = env::var_os(name)
         .map(PathBuf::from)
         .ok_or_else(|| SecurityError::Unavailable(format!("{name} is required")))?;
@@ -207,9 +208,9 @@ fn required_secret_file(name: &str, min_bytes: usize, max_bytes: usize) -> Resul
     let mut file = options.open(&path).map_err(|error| {
         SecurityError::Unavailable(format!("open {name} {}: {error}", path.display()))
     })?;
-    let opened = file.metadata().map_err(|error| {
-        SecurityError::Unavailable(format!("read {name} metadata: {error}"))
-    })?;
+    let opened = file
+        .metadata()
+        .map_err(|error| SecurityError::Unavailable(format!("read {name} metadata: {error}")))?;
     validate_open_secret_metadata(name, &opened)?;
     #[cfg(unix)]
     {
@@ -249,9 +250,8 @@ fn validate_secret_path(name: &str, path: &Path) -> Result<fs::Metadata, Securit
             "{name} must be an absolute path"
         )));
     }
-    let metadata = fs::symlink_metadata(path).map_err(|error| {
-        SecurityError::Unavailable(format!("read {name} metadata: {error}"))
-    })?;
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| SecurityError::Unavailable(format!("read {name} metadata: {error}")))?;
     if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
         return Err(SecurityError::Unavailable(format!(
             "{name} must reference a regular non-symlink file"
@@ -339,7 +339,8 @@ mod tests {
     fn secret_file_must_be_private_and_non_symlink() {
         use std::os::unix::fs::PermissionsExt;
 
-        let root = std::env::temp_dir().join(format!("bmscl-security-secret-{}", uuid::Uuid::new_v4()));
+        let root =
+            std::env::temp_dir().join(format!("bmscl-security-secret-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let secret = root.join("token");
         fs::write(&secret, b"01234567890123456789012345678901\n").unwrap();

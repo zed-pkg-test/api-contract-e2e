@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: 22.16.0
       - name: Compare mirrored AI-policy peer authorities
-        uses: ORESoftware/typespec-json-schema-validator@dfc28bfc000faba5a963f23c708171dfd5f8debf
+        uses: ORESoftware/typespec-json-schema-validator@813d5f021e02574f529a9553b670719f8f10d02c
         with:
           typespec: fixtures/promotion/ores-legal-28/ai-policy/main.tsp
           schema: fixtures/promotion/ores-legal-28/ai-policy/authored.schema.json
@@ -54,5 +54,5 @@ jobs:
           git hash-object fixtures/promotion/ores-legal-28/ai-policy/main.tsp
           git hash-object fixtures/promotion/ores-legal-28/ai-policy/authored.schema.json
           echo "source_repo=ores-legal/ores-legal-interfaces"
-          echo "source_head=cea162a3ebb04439adb5893a126450ac697fa58b"
+          echo "source_head=8e0c82fcfe4af9e24e856de3ad40968ed151a6bd"
           echo "source_pr=28"

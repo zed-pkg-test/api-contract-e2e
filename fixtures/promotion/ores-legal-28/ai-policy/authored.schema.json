@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ores-legal:ai-policy:v1",
+  "$defs": {
+    "AiPolicySubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "unevaluatedProperties": false,
+      "required": ["subject_ref", "kind"],
+      "properties": {
+        "subject_ref": {"type": "string", "minLength": 1, "maxLength": 192},
+        "kind": {"enum": ["human", "service", "agent"]}
+      }
+    },
+    "AiResourceContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "unevaluatedProperties": false,
+      "required": ["resource_ref", "resource_kind", "classification", "contains_pii", "contains_secrets", "legal_hold"],
+      "properties": {
+        "resource_ref": {"type": "string", "minLength": 1, "maxLength": 192},
+        "resource_kind": {"enum": ["repository", "source_code", "document", "dataset", "message", "artifact", "tool"]},
+        "classification": {"enum": ["public", "internal", "confidential", "restricted"]},
+        "tenant_ref": {"type": "string", "minLength": 1, "maxLength": 128},
+        "contains_pii": {"type": "boolean"},
+        "contains_secrets": {"type": "boolean"},
+        "legal_hold": {"type": "boolean"}
+      }
+    },
+    "AiExecutionContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "unevaluatedProperties": false,
+      "required": ["action", "provider_class", "model_class", "environment", "training_use", "retention"],
+      "properties": {
+        "action": {"enum": ["read", "summarize", "generate", "modify", "execute", "publish", "export"]},
+        "provider_class": {"type": "string", "minLength": 1, "maxLength": 128},
+        "model_class": {"type": "string", "minLength": 1, "maxLength": 128},
+        "environment": {"enum": ["local", "sandbox", "ci", "server", "external_provider"]},
+        "training_use": {"enum": ["prohibited", "provider_default", "explicitly_allowed"]},
+        "retention": {"enum": ["none", "ephemeral", "bounded", "provider_default"]}
+      }
+    },
+    "AiPolicyConstraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "unevaluatedProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["human_review", "tool_allowlist", "provider_allowlist", "no_external_export", "no_training", "ephemeral_retention", "sandbox_required", "redaction_required"]},
+        "value": {"type": "string", "minLength": 1, "maxLength": 192}
+      }
+    },
+    "AiPolicyEvaluationRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "unevaluatedProperties": false,
+      "required": ["request_id", "subject", "resource", "execution", "policy_bundle_sha256", "evaluated_at"],
+      "properties": {
+        "request_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{16,128}$"},
+        "subject": {"$ref": "#/$defs/AiPolicySubject"},
+        "resource": {"$ref": "#/$defs/AiResourceContext"},
+        "execution": {"$ref": "#/$defs/AiExecutionContext"},
+        "policy_bundle_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "evaluated_at": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+      }
+    },
+    "AiPolicyDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "unevaluatedProperties": false,
+      "required": ["decision_id", "policy_version", "result", "constraints", "request_sha256", "compiled_policy_sha256", "source_policy_sha256", "decided_at"],
+      "properties": {
+        "decision_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{16,128}$"},
+        "policy_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "result": {"enum": ["allow", "deny", "require_review", "allow_with_constraints"]},
+        "constraints": {"type": "array", "items": {"$ref": "#/$defs/AiPolicyConstraint"}},
+        "request_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "compiled_policy_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "source_policy_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "decided_at": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "expires_at": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+      }
+    },
+    "AiPolicyReviewReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "unevaluatedProperties": false,
+      "required": ["review_id", "decision_id", "reviewer_ref", "result", "reviewed_resource_sha256", "reviewed_at"],
+      "properties": {
+        "review_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{16,128}$"},
+        "decision_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{16,128}$"},
+        "reviewer_ref": {"type": "string", "minLength": 1, "maxLength": 192},
+        "result": {"enum": ["approved", "rejected"]},
+        "reviewed_resource_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "reviewed_at": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+      }
+    }
+  }
+}

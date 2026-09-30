@@ -1,6 +1,7 @@
 name: takoda-daemon-exact-head-audit
 
 on:
+  pull_request:
   push:
     branches:
       - "audit/takoda-daemon-95518"

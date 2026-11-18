@@ -39,6 +39,22 @@ pub enum HandleError {
     Poisoned,
 }
 
+/// A failed ref_owned admission must return the original owner instead
+/// of dropping it invisibly. This is separate from errors after issuance.
+pub struct RefAdmissionError<T> {
+    pub reason: HandleError,
+    pub owned: T,
+}
+
+impl<T> std::fmt::Debug for RefAdmissionError<T> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_struct("RefAdmissionError")
+            .field("reason", &self.reason)
+            .field("owned", &"<retained>")
+            .finish()
+    }
+}
+
 /// Typed, opaque checked-handle identity. Copying it does **not** copy or
 /// create ownership; the generation ledger rejects a duplicate unref_owned.
 #[derive(Debug)]
@@ -121,14 +137,23 @@ impl<T> CheckedArena<T> {
 
     /// Checked equivalent of a future `ref! owner`: consume the owned value
     /// and install it in this arena, with a bounded typed slot identity.
-    pub fn ref_owned(&self, value: T) -> Result<CheckedHandle<T>, HandleError> {
-        let mut state = self.ledger.lock().map_err(|_| HandleError::Poisoned)?;
+    pub fn ref_owned(&self, value: T) -> Result<CheckedHandle<T>, RefAdmissionError<T>> {
+        let mut state = match self.ledger.lock() {
+            Ok(guard) => guard,
+            Err(_) => return Err(RefAdmissionError {
+                reason: HandleError::Poisoned, owned: value
+            }),
+        };
         let index = if let Some(i) = state.entries.iter().position(|s|
             s.value.is_none() && !s.exhausted
         ) {
             i
         } else {
-            if state.entries.len() >= self.capacity { return Err(HandleError::Capacity); }
+            if state.entries.len() >= self.capacity {
+                return Err(RefAdmissionError {
+                    reason: HandleError::Capacity, owned: value
+                });
+            }
             state.entries.push(Entry {
                 generation: 1, value: None, exhausted: false,
             });
@@ -282,7 +307,9 @@ mod tests {
         assert!(matches!(CheckedArena::<u8>::new(1, 1, MAX_SLOTS+1), Err(HandleError::Capacity)));
         let arena = CheckedArena::new(1, 1, 1).unwrap();
         let h = arena.ref_owned(42).unwrap();
-        assert!(matches!(arena.ref_owned(33), Err(HandleError::Capacity)));
+        let rejected = arena.ref_owned(33).err().expect("capacity rejection");
+        assert_eq!(rejected.reason, HandleError::Capacity);
+        assert_eq!(rejected.owned, 33);
         assert_eq!(arena.unref_owned(h), Ok(42));
         let h2 = arena.ref_owned(33).unwrap();
         assert_eq!(arena.unref_owned(h2), Ok(33));
@@ -298,8 +325,53 @@ mod tests {
             h.generation = u32::MAX;
         }
         assert_eq!(arena.unref_owned(h), Ok(42));
-        assert_eq!(arena.ref_owned(13), Err(HandleError::Capacity));
+        let rejected = arena.ref_owned(13).err().expect("exhausted slot");
+        assert_eq!(rejected.reason, HandleError::Capacity);
+        assert_eq!(rejected.owned, 13);
         assert!(matches!(arena.deref_checked(h), Err(HandleError::StaleGeneration)));
+    }
+
+    #[test]
+    fn failed_admission_retains_original_owner_without_drop() {
+        struct Tracked(Arc<AtomicUsize>);
+        impl Drop for Tracked {
+            fn drop(&mut self) {
+                self.0.fetch_add(1, AtomicOrdering::SeqCst);
+            }
+        }
+        let count = Arc::new(AtomicUsize::new(0));
+        let arena = CheckedArena::new(1, 1, 1).unwrap();
+        let h = arena.ref_owned(Tracked(Arc::clone(&count))).ok().unwrap();
+        let rejected = arena.ref_owned(Tracked(Arc::clone(&count))).err().unwrap();
+        assert_eq!(rejected.reason, HandleError::Capacity);
+        assert_eq!(count.load(AtomicOrdering::SeqCst), 0);
+        drop(rejected.owned);
+        assert_eq!(count.load(AtomicOrdering::SeqCst), 1);
+        let owned = arena.unref_owned(h).unwrap();
+        drop(owned);
+        assert_eq!(count.load(AtomicOrdering::SeqCst), 2);
+    }
+
+    #[test]
+    fn racing_unref_is_linearizable_and_one_owner_survives() {
+        use std::sync::Barrier;
+        use std::thread;
+        let arena = Arc::new(CheckedArena::new(1, 1, 1).unwrap());
+        let handle = arena.ref_owned(42u64).ok().unwrap();
+        let barrier = Arc::new(Barrier::new(3));
+        let workers: Vec<_> = (0..2).map(|_| {
+            let arena = Arc::clone(&arena);
+            let gate = Arc::clone(&barrier);
+            thread::spawn(move || {
+                gate.wait();
+                arena.unref_owned(handle)
+            })
+        }).collect();
+        barrier.wait();
+        let results: Vec<_> = workers.into_iter().map(|w| w.join().unwrap()).collect();
+        assert_eq!(results.iter().filter(|r| **r == Ok(42)).count(), 1);
+        assert_eq!(results.iter().filter(|r| **r == Err(HandleError::StaleGeneration)).count(), 1);
+        assert_eq!(arena.live_handles(), Ok(0));
     }
 
     #[test]

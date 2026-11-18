@@ -37,7 +37,7 @@ jobs:
           be35793bf378e59c9f48a22829205fe7df960b0b src/check/lambda_types.rs
           bd0df8eea3cb087ef153c67f925b55b3e0530cfa src/check/loan_liveness.rs
           60bc6cfc0cee7bafc204cef7e648d5970d2582a6 src/detached_io.rs
-          c6373d73d31168ced1f2a8fc111f8d4b51c49e8b src/checked_handle_runtime.rs
+          44b9ecd201dfc08479e086bbb58b1200de1dbef5 src/checked_handle_runtime.rs
           b9a5b982251315604e90680066bbbbfc49ab1a2a src/diag.rs
           8d95753c2a759cb0ccc7245a761f4ab558ccb6ff src/generator_cfg.rs
           28e20b83c50f3c8926930ec34b567b699371a377 src/generator_frame.rs
@@ -89,7 +89,7 @@ jobs:
           add947bcbe81cbf7239542ce2f4d16247ced6fb1 tests/fixtures/pass/188-multiply-still-not-dereference.atto
           EXPECTED_SOURCE
           git fsck --full --strict --no-reflogs
-          echo "source_head=f670f2ee02205168e64fd9c09890c7d92d623d38"
+          echo "source_head=5e483cb63257f24d8e507c8a80ca164b9340fddc"
           echo "selected_blobs=64; 100% selected source Git blobs matched"
           echo "Focused compiler/fixture source slice, not full repository mirror"
       - name: Install Rust 1.85.1 and wasm32, formatter, Clippy

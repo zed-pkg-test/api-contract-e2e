@@ -1,0 +1,12 @@
+name: Atto lifetime runner probe
+on:
+  push:
+    branches: [ci/atto-lt-binder-20261118]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Execute real step
+        run: echo 'atto lifetime runner actually executed'

@@ -1,0 +1,10 @@
+// expect-error: E_UNSUPPORTED_HANDLE
+// java: rejects
+// Dead branch or optimizer removal must never admit unverified handle IR.
+pub fnc main(): int {
+  if false {
+    val hidden = ref! 42;
+  }
+  fi
+  return 42;
+}

@@ -1,0 +1,12 @@
+// expect-exit: 42
+// java: rejects
+// An unused read loan must not keep an owner borrowed for the whole scope.
+define class Parcel as
+  pub let int value = 42;
+end
+pub fnc main(): int {
+  val parcel = new Parcel();
+  val unused_reader = borrow! parcel;
+  val moved = take! parcel;
+  return moved.value;
+}

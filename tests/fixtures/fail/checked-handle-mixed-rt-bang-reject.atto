@@ -1,0 +1,7 @@
+// expect-error: E_SYNTAX
+// java: rejects
+// Combining legacy rt ref and bang marker is not two valid operators.
+pub fnc main(): int {
+  val handle = rt ref! 42;
+  return 42;
+}

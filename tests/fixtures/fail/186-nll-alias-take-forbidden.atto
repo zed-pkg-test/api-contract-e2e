@@ -1,0 +1,12 @@
+// expect-error: E_BORROW
+// java: rejects
+// A borrowed alias is never promoted to an owned handle by take!.
+define class Parcel as
+  pub let int value = 42;
+end
+pub fnc main(): int {
+  val parcel = new Parcel();
+  val reader = borrow! parcel;
+  val stolen = take! reader;
+  return stolen.value;
+}

@@ -1,0 +1,7 @@
+// expect-error: E_UNSUPPORTED_TYPE
+// java: rejects
+define class Person as
+  pub let int age = 42;
+end
+fnc inspect(item: Borrow<Person>): int { return 1; }
+pub fnc main(): int { return 0; }

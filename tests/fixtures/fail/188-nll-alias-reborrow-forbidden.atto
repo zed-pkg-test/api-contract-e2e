@@ -1,0 +1,12 @@
+// expect-error: E_BORROW
+// java: rejects
+// Reborrow without a verified parent-loan lifetime remains unsupported.
+define class Parcel as
+  pub let int value = 42;
+end
+pub fnc main(): int {
+  val parcel = new Parcel();
+  val reader = borrow! parcel;
+  val indirect = borrow! reader;
+  return indirect.value;
+}

@@ -1,0 +1,8 @@
+// expect-error: E_UNSUPPORTED_HANDLE
+// java: rejects
+// Legacy and canonical ref operators must have equal admission status.
+pub fnc main(): int {
+  val original = 42;
+  val h = rt ref original;
+  return 0;
+}

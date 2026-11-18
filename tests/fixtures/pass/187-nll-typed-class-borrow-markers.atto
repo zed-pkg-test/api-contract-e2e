@@ -1,0 +1,16 @@
+// expect-exit: 42
+// expect-stdout: 40
+// java: rejects
+// Two shared loans retire after last use; unique writer retains parent provenance.
+define class Parcel as
+  pub let int value = 20;
+end
+pub fnc main(): int {
+  let parcel = new Parcel();
+  val first = borrow! parcel;
+  val second = borrow! parcel;
+  stdio.println(first.value + second.value);
+  val writer = borrow! mut parcel;
+  writer.value = 42;
+  return parcel.value;
+}

@@ -1,0 +1,7 @@
+// expect-error: E_UNSUPPORTED_HANDLE
+// java: rejects
+pub fnc main(): int {
+  val h = 42;
+  val view = rt deref h;
+  return 0;
+}

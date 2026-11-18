@@ -1,12 +1,125 @@
-name: Atto lifetime runner probe
+name: Atto lifetime exact-source native and Wasm checks
 on:
   push:
-    branches: [ci/atto-lt-binder-20261118]
+    branches:
+      - ci/atto-lt-binder-20261118
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  probe:
+  compiler-guest:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
-      - name: Execute real step
-        run: echo 'atto lifetime runner actually executed'
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify all 64 exact source Git blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find src -type f | wc -l | tr -d '[:space:]')" = "30"
+          while read -r sha path; do
+            test -f "$path"
+            test "$(git hash-object "$path")" = "$sha" || { echo "SHA mismatch: $path"; exit 1; }
+          done <<'EXPECTED_SOURCE'
+          387853d3838d48e0c89d77fbecfcd41d53fbd4ca Cargo.lock
+          7bcb27474e87c1f05d6f96acf8a6a6c75ac4bcef Cargo.toml
+          b170ae743ce4883d2e0fbd637b8aef674e764cf9 src/any_type_lower.rs
+          b27921e31dc0f11014106e14e6d7461b11ef5a1e src/ast.rs
+          443ed2208ffd04f47f4abedaa2622c70b5a06a00 src/bin/attoc.rs
+          78bff40c30c3d2333cd13edfba296abe500aa19b src/check.rs
+          de2aeca4dc9636bdb39acb4690bc80efd488cb0b src/check/callable_ir.rs
+          380acd67a290ca445ab076f8fe6b0ca1e6acda37 src/check/checked_handle_gate.rs
+          f04a89b4911df5b073f979a54215749151eb1ccf src/check/direct_lambda.rs
+          58248b23c28486a220f501f5826b59f3edf88499 src/check/generator_lower.rs
+          d14fd3108955435c4c176d9aa605a4b8f7b88236 src/check/generator_lower/liveness.rs
+          be35793bf378e59c9f48a22829205fe7df960b0b src/check/lambda_types.rs
+          bd0df8eea3cb087ef153c67f925b55b3e0530cfa src/check/loan_liveness.rs
+          60bc6cfc0cee7bafc204cef7e648d5970d2582a6 src/detached_io.rs
+          c6373d73d31168ced1f2a8fc111f8d4b51c49e8b src/checked_handle_runtime.rs
+          b9a5b982251315604e90680066bbbbfc49ab1a2a src/diag.rs
+          8d95753c2a759cb0ccc7245a761f4ab558ccb6ff src/generator_cfg.rs
+          28e20b83c50f3c8926930ec34b567b699371a377 src/generator_frame.rs
+          08598023159a3d3373bef12cf629ea328c9242bf src/io_shorthand.rs
+          13e6beb5dbae17a84fff71ddc7368fed7282df5e src/lexer.rs
+          a8c54990c93f14e937b49cc8af730d004467205f src/lib.rs
+          2b6980112ef6018df3525267dafce9087c4e9f22 src/module_lower.rs
+          a41027d5f19f15e4fb7ce9a759d63e578d7246c4 src/nominal_lower.rs
+          b65624b33420a5947dd58957cc20e0ba57ac3590 src/parser.rs
+          38a6cbd4495887c76cbf1cee26b1d0d65e6070be src/routine_lower.rs
+          eae26a28f0453e660ae2cfee933b28fca0b8fa24 src/shape_lower.rs
+          109f12ca8df6dc5fe4186374a84d7c10ca3d1ec8 src/state_admission.rs
+          ff85d685ff6f4a1c5bf24154244ee06231851c7c src/target_syntax.rs
+          ae94ba2232ce26f7da37adcbf77d9ba800f33f63 src/target_typed.rs
+          0d6ab98e86cb7a50fd3c8e317151f5aef768b35f src/visibility_lower.rs
+          ec5478562f582553633f657c575b0e8518f03730 src/wasm.rs
+          86fc6a6598d339a3fae5e762f983ea95e2e472d9 src/wasm/generator_runtime.rs
+          e9fbd60c41993a4c151e8c7f167d12cd7be54c50 tests/checked_handle_prefix_syntax.rs
+          5357bd36801dee4e771d0a2fea8e54ff5c579ad0 tests/class_loan_typed_ir.rs
+          7a7874de2027fd7a4f756dd6d42d6e22ec6eecdf tests/lifetime_binder_syntax.rs
+          52fbdc5b7a310c4d37bf5e81d667497c64def8ad tests/fixtures/fail/184-nll-retain-loan-through-nested-block.atto
+          41b50fcf559cbd1df6abb38c47eb9234175fe7cf tests/fixtures/fail/185-nll-later-branch-loan-use.atto
+          c8a0d9c2a99e26c4fe85552ba0eb5181f14856eb tests/fixtures/fail/186-nll-alias-take-forbidden.atto
+          7889637625f040a9e49d48129f0fbe6551d8f897 tests/fixtures/fail/187-nll-alias-owned-binding-forbidden.atto
+          e32ae1aea451b15051a114183ffee81269793a1f tests/fixtures/fail/188-nll-alias-reborrow-forbidden.atto
+          5fe1fca062a86db528ad167b45fc033ae0cd215a tests/fixtures/fail/189-borrow-type-shorthand-not-yet-lowered.atto
+          d933362989a493920f8c91a3f3cec12e4f969f35 tests/fixtures/fail/190-borrow-mut-type-shorthand-not-yet-lowered.atto
+          808e51f0070662bc56613fd67fbf18b26e0c7701 tests/fixtures/fail/191-borrow-type-descriptive-not-yet-lowered.atto
+          9a6b3c7f6d4deae562a04bd790484f4164c02e52 tests/fixtures/fail/192-borrow-lifetime-positional-not-yet-lowered.atto
+          c284488d17781a6a80829b1e1d3515904d6799b6 tests/fixtures/fail/193-pointer-type-requires-proof.atto
+          3882bd803cd21e08455af8266a93e801b46bca72 tests/fixtures/fail/194-shared-type-requires-proof.atto
+          0d9c65ea800aa0314ce650d6464104c9bd14442f tests/fixtures/fail/195-star-pointer-sigil-disallowed.atto
+          81d6b9fb7ff759eae46563fea8c15f898c68ff76 tests/fixtures/fail/196-star-pointer-deref-disallowed.atto
+          2a83a78dba713b5d0de60d144d927cd50e67c488 tests/fixtures/fail/197-ampersand-borrow-expression-disallowed.atto
+          58372ca777f42c7bd4579c5b7c6c378c73ccc8e6 tests/fixtures/fail/checked-handle-dead-branch-reject.atto
+          122d00ef3c3c697021fa450647c99487117a6097 tests/fixtures/fail/checked-handle-deref-compact.atto
+          29bfb3523d58baeb70cedb4e04ddc4696d045d3a tests/fixtures/fail/checked-handle-lambda-capture-reject.atto
+          938a63c4993270be3133681f414d658aaf15d0dd tests/fixtures/fail/checked-handle-mixed-rt-bang-reject.atto
+          38f8c97c813ee08313851c25bc3889d9a9179889 tests/fixtures/fail/checked-handle-ref-bang.atto
+          c979e6f0552dfaf4f117005cfea277237ecb0523 tests/fixtures/fail/checked-handle-ref-mut-disallowed.atto
+          290883f327b61b6e2fb861e7876ed5889c9f9394 tests/fixtures/fail/checked-handle-rt-deref.atto
+          16d2131cd4c16fac0f681a5a21acc72de9e17b4b tests/fixtures/fail/checked-handle-rt-ref.atto
+          b263a2231e95e0e18dc563e923e5ebbac620e192 tests/fixtures/fail/checked-handle-rt-unref.atto
+          4e9b72d6055ae13c27386dae3be2ae4e4c6eade2 tests/fixtures/fail/checked-handle-unref-grouped.atto
+          240ac96968fa2dc59897f1b1e0782e936ada45df tests/fixtures/pass/184-nll-reader-then-writer.atto
+          ac84b9fd9edffbb41fd20f4e031d02e48c866139 tests/fixtures/pass/185-nll-unused-loan-then-move.atto
+          357ac12b5ae95cd0d81247681ddaace6d40a63de tests/fixtures/pass/186-nll-permanent-provenance-owned-owner.atto
+          d3a4a03b4965af9364cffc2003930e4ddc87eea6 tests/fixtures/pass/187-nll-typed-class-borrow-markers.atto
+          add947bcbe81cbf7239542ce2f4d16247ced6fb1 tests/fixtures/pass/188-multiply-still-not-dereference.atto
+          EXPECTED_SOURCE
+          git fsck --full --strict --no-reflogs
+          echo "source_head=f670f2ee02205168e64fd9c09890c7d92d623d38"
+          echo "selected_blobs=64; 100% selected source Git blobs matched"
+          echo "Focused compiler/fixture source slice, not full repository mirror"
+      - name: Install Rust 1.85.1 and wasm32, formatter, Clippy
+        run: |
+          rustup toolchain install 1.85.1 --profile minimal --target wasm32-unknown-unknown
+          rustup component add rustfmt clippy --toolchain 1.85.1
+          rustup default 1.85.1
+      - name: Install Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+      - name: Check new class loan scanner rustfmt
+        run: rustfmt --edition 2021 --check src/check/loan_liveness.rs
+      - name: Clippy native compiler source (pre-existing unrelated warnings reported)
+        run: cargo clippy --locked --lib --bin attoc
+      - name: Rust compiler library tests
+        run: cargo test --locked --lib
+      - name: Typed class-loan provenance integration tests
+        run: cargo test --locked --test class_loan_typed_ir
+      - name: Checked-handle prefix AST and fail-closed tests
+        run: cargo test --locked --test checked_handle_prefix_syntax
+      - name: Lifetime syntax regression tests
+        run: cargo test --locked --test lifetime_binder_syntax
+      - name: Native release compiler
+        run: cargo build --locked --release --bin attoc
+      - name: Independent standalone wasm32 release compiler
+        run: |
+          cargo rustc --locked --release --lib --target wasm32-unknown-unknown --crate-type cdylib -- -C link-arg=--max-memory=67108864
+          sha256sum target/wasm32-unknown-unknown/release/atto_compiler.wasm
+      - name: Execute actual class-loan NLL guest regressions and differential native/Wasm decisions
+        env:
+          ATTOC: target/release/attoc
+        run: node tests/class_nll_selected.mjs

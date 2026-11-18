@@ -1,0 +1,8 @@
+// expect-error: E_SYNTAX
+// java: rejects
+// Use Pointer<Person>, not a pointer type sigil.
+define class Person as
+  pub let int age = 42;
+end
+fnc inspect(item: *Person): int { return 1; }
+pub fnc main(): int { return 0; }

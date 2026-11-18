@@ -1,0 +1,15 @@
+// expect-exit: 42
+// expect-stdout: 40
+// java: rejects
+// The first loan ends after its last use, not at lexical block end.
+define class Parcel as
+  pub let int value = 40;
+end
+pub fnc main(): int {
+  let parcel = new Parcel();
+  val reader = borrow! parcel;
+  stdio.println(reader.value);
+  val writer = borrow! mut parcel;
+  writer.value = 42;
+  return parcel.value;
+}

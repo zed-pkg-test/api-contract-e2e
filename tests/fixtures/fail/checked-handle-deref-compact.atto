@@ -1,0 +1,8 @@
+// expect-error: E_UNSUPPORTED_HANDLE
+// java: rejects
+// Compact deref!h spelling must parse as a checked-handle operator.
+pub fnc main(): int {
+  val h = 42;
+  val view = deref!h;
+  return 0;
+}

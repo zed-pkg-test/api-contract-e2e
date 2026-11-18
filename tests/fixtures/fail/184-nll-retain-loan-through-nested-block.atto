@@ -1,0 +1,14 @@
+// expect-error: E_BORROW
+// java: rejects
+// An inner block cannot end an outer loan used later in the function.
+define class Parcel as
+  pub let int value = 42;
+end
+pub fnc main(): int {
+  let parcel = new Parcel();
+  val reader = borrow! parcel;
+  block { stdio.println(0); }
+  val writer = borrow! mut parcel;
+  writer.value = 99;
+  return reader.value;
+}

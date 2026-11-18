@@ -1,0 +1,8 @@
+// expect-error: E_UNSUPPORTED_HANDLE
+// java: rejects
+// Ref produces a checked handle, never a phantom owned scalar.
+pub fnc main(): int {
+  val original = 42;
+  val h = ref! original;
+  return 0;
+}

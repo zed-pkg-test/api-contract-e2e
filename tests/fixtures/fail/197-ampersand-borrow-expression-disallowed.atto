@@ -1,0 +1,11 @@
+// expect-error: E_SYNTAX
+// java: rejects
+// Loan creation uses borrow! rather than &x.
+define class Person as
+  pub let int age = 42;
+end
+pub fnc main(): int {
+  val person = new Person();
+  val alias = &person;
+  return alias.age;
+}

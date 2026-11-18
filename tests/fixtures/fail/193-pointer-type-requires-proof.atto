@@ -1,0 +1,8 @@
+// expect-error: E_UNSUPPORTED_TYPE
+// java: rejects
+// Pointer<T> is reserved but has no verified pointer/FFI lowering yet.
+define class Person as
+  pub let int age = 42;
+end
+fnc inspect(item: Pointer<Person>): int { return 1; }
+pub fnc main(): int { return 0; }

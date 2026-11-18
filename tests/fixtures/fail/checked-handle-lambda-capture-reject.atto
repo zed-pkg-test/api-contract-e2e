@@ -1,0 +1,7 @@
+// expect-error: E_UNSUPPORTED_HANDLE
+// java: rejects
+// Pre-lambda-lifting gate rejects checked-handle execution in a callback.
+pub fnc main(): int {
+  val callback = |x| -> deref! x;
+  return 42;
+}

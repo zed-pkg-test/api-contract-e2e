@@ -1,0 +1,5 @@
+// expect-exit: 42
+// '*' remains an ordinary arithmetic multiplication token, not dereference.
+pub fnc main(): int {
+  return 6 * 7;
+}

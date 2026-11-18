@@ -1,0 +1,8 @@
+// expect-error: E_SYNTAX
+// java: rejects
+// Mutability qualifier belongs to borrow! only.
+pub fnc main(): int {
+  val h = 42;
+  val checked = ref! mut h;
+  return 0;
+}

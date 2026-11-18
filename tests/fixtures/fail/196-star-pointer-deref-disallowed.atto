@@ -1,0 +1,10 @@
+// expect-error: E_SYNTAX
+// java: rejects
+// Dereference must be an explicit validated operation, not *x.
+define class Person as
+  pub let int age = 42;
+end
+pub fnc main(): int {
+  val person = new Person();
+  return *person;
+}

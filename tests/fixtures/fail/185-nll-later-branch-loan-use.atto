@@ -1,0 +1,15 @@
+// expect-error: E_BORROW
+// java: rejects
+// Even a conditional later use keeps an earlier read loan live.
+define class Parcel as
+  pub let int value = 42;
+end
+pub fnc main(): int {
+  let parcel = new Parcel();
+  val reader = borrow! parcel;
+  val writer = borrow! mut parcel;
+  if parcel.value eq 42 then
+    return reader.value;
+  fi
+  return writer.value;
+}

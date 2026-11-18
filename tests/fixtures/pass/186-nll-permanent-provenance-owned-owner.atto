@@ -1,0 +1,16 @@
+// expect-exit: 42
+// expect-stdout: 40
+// java: rejects
+// Loan expiry restores owner access; it does not turn either loan into an owner.
+define class Parcel as
+  pub let int value = 40;
+end
+pub fnc main(): int {
+  let parcel = new Parcel();
+  val reader = borrow! parcel;
+  stdio.println(reader.value);
+  val writer = borrow! mut parcel;
+  writer.value = 42;
+  val transferred = take! parcel;
+  return transferred.value;
+}

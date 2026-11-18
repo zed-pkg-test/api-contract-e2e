@@ -1,0 +1,12 @@
+// expect-error: E_BORROW
+// java: rejects
+// Assigning a borrowed class alias to an owned local is not ownership transfer.
+define class Parcel as
+  pub let int value = 42;
+end
+pub fnc main(): int {
+  val parcel = new Parcel();
+  val reader = borrow! parcel;
+  val phantom_owner = reader;
+  return phantom_owner.value;
+}

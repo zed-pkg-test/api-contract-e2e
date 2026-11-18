@@ -1,0 +1,8 @@
+// expect-error: E_UNSUPPORTED_HANDLE
+// java: rejects
+// Grouped operand is not a normal call nor an unchecked free.
+pub fnc main(): int {
+  val h = 42;
+  val retired = unref!(h);
+  return 0;
+}

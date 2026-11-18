@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Verify all 64 exact source Git blobs
+      - name: Verify all 65 exact source Git blobs
         shell: bash
         run: |
           set -euo pipefail
@@ -58,6 +58,7 @@ jobs:
           e9fbd60c41993a4c151e8c7f167d12cd7be54c50 tests/checked_handle_prefix_syntax.rs
           5357bd36801dee4e771d0a2fea8e54ff5c579ad0 tests/class_loan_typed_ir.rs
           7a7874de2027fd7a4f756dd6d42d6e22ec6eecdf tests/lifetime_binder_syntax.rs
+          e8c21adfb05ead7d98446397eda0a8f7eae11af2 tests/lifetime_binder_hardening.rs
           52fbdc5b7a310c4d37bf5e81d667497c64def8ad tests/fixtures/fail/184-nll-retain-loan-through-nested-block.atto
           41b50fcf559cbd1df6abb38c47eb9234175fe7cf tests/fixtures/fail/185-nll-later-branch-loan-use.atto
           c8a0d9c2a99e26c4fe85552ba0eb5181f14856eb tests/fixtures/fail/186-nll-alias-take-forbidden.atto
@@ -89,8 +90,8 @@ jobs:
           add947bcbe81cbf7239542ce2f4d16247ced6fb1 tests/fixtures/pass/188-multiply-still-not-dereference.atto
           EXPECTED_SOURCE
           git fsck --full --strict --no-reflogs
-          echo "source_head=5e483cb63257f24d8e507c8a80ca164b9340fddc"
-          echo "selected_blobs=64; 100% selected source Git blobs matched"
+          echo "source_head=11b62578355c8e216edc56ce6ecab7de75e4bbba"
+          echo "selected_blobs=65; 100% selected source Git blobs matched"
           echo "Focused compiler/fixture source slice, not full repository mirror"
       - name: Install Rust 1.85.1 and wasm32, formatter, Clippy
         run: |
@@ -113,6 +114,8 @@ jobs:
         run: cargo test --locked --test checked_handle_prefix_syntax
       - name: Lifetime syntax regression tests
         run: cargo test --locked --test lifetime_binder_syntax
+      - name: Adversarial lt! parser and deterministic fuzz tests
+        run: cargo test --locked --test lifetime_binder_hardening
       - name: Native release compiler
         run: cargo build --locked --release --bin attoc
       - name: Independent standalone wasm32 release compiler
